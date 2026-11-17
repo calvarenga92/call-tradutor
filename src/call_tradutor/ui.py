@@ -1,11 +1,11 @@
-"""Janela de legenda: sem borda, sempre no topo, arrastável e redimensionável."""
+"""Janela de legenda: sem borda, sempre no topo, arrastável, altura fixa com rolagem."""
 import html
-from collections import deque
+import time
 
 from PySide6.QtCore import QObject, QPoint, Qt, Signal
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import (QHBoxLayout, QLabel, QPushButton, QSizeGrip, QVBoxLayout,
-                               QWidget)
+from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
+                               QSizeGrip, QVBoxLayout, QWidget)
 
 LISTEN, SPEAK = "ouvir", "falar"
 
@@ -22,7 +22,27 @@ QPushButton { color: #ddd; background: rgba(255,255,255,0.08); border: none;
               border-radius: 6px; padding: 3px 9px; font-size: 12px; }
 QPushButton:hover { background: rgba(255,255,255,0.18); }
 QPushButton[off="true"] { color: #f88; }
+QScrollArea { background: transparent; border: none; }
+QScrollArea > QWidget > QWidget { background: transparent; }
+QScrollBar:vertical { background: transparent; width: 8px; margin: 2px; }
+QScrollBar::handle:vertical { background: rgba(255,255,255,0.25); border-radius: 3px; min-height: 24px; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
 """
+
+HEIGHT = 400          # altura fixa da janela
+PARAGRAPH_GAP_S = 2.5  # pausa da outra pessoa que abre um parágrafo novo
+
+
+def _scroll(widget: QWidget, max_height: int | None = None) -> QScrollArea:
+    area = QScrollArea()
+    area.setWidget(widget)
+    area.setWidgetResizable(True)
+    area.setFrameShape(QFrame.NoFrame)
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    if max_height:
+        area.setMaximumHeight(max_height)
+    return area
 
 
 class Overlay(QWidget):
@@ -30,10 +50,11 @@ class Overlay(QWidget):
         super().__init__()
         self.font_size = font_size
         self.opacity = opacity
-        self.lines: deque[str] = deque(maxlen=history * 4)
-        self.max_chars = history * 110
+        # conversa inteira: [quem, texto] — "them" (outra pessoa, em PT) ou "me" (você, em EN)
+        self.entries: list[list[str]] = []
+        self._last_them = 0.0
         self.preview = ""
-        self.me = ""
+        self._stick = True  # rolagem acompanha o fim, a menos que você tenha subido
         self.captions_on = True
         self.coach_on = True
         self._drag: QPoint | None = None
@@ -42,7 +63,8 @@ class Overlay(QWidget):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet(BTN_STYLE)
-        self.resize(820, 360)
+        self.resize(820, HEIGHT)
+        self.setFixedHeight(HEIGHT)
 
         self.status = QLabel("carregando…")
         self.status.setStyleSheet("color:#aaa; font-size:12px;")
@@ -72,27 +94,30 @@ class Overlay(QWidget):
         self.captions = QLabel()
         self.captions.setWordWrap(True)
         self.captions.setTextFormat(Qt.RichText)
-        self.captions.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+        self.captions.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.captions_area = _scroll(self.captions)
+        bar = self.captions_area.verticalScrollBar()
+        bar.rangeChanged.connect(lambda _min, mx: bar.setValue(mx) if self._stick else None)
+        bar.valueChanged.connect(lambda v: setattr(self, "_stick", v >= bar.maximum() - 6))
         # bloco de sugestão de resposta
         self.reply = QLabel()
         self.reply.setWordWrap(True)
         self.reply.setTextFormat(Qt.RichText)
         self.reply.setStyleSheet("background: rgba(255, 210, 90, 0.10); border-radius: 8px;"
-                                 "padding: 8px;")
-        self.reply.hide()
-        self.mine = QLabel()
-        self.mine.setWordWrap(True)
-        self.mine.setTextFormat(Qt.RichText)
+                                 "padding: 6px 8px;")
+        self.reply.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.reply_area = _scroll(self.reply, max_height=130)
+        self.reply_area.hide()
 
         bottom = QHBoxLayout()
-        bottom.addWidget(self.mine, 1)
+        bottom.addStretch(1)
         bottom.addWidget(QSizeGrip(self), 0, Qt.AlignBottom | Qt.AlignRight)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 8, 8, 8)
         layout.addLayout(top)
-        layout.addWidget(self.captions, 1)
-        layout.addWidget(self.reply)
+        layout.addWidget(self.captions_area, 1)
+        layout.addWidget(self.reply_area)
         layout.addLayout(bottom)
 
         bridge.event.connect(self.on_event)
@@ -115,18 +140,17 @@ class Overlay(QWidget):
         if which == "coach":
             self.coach_on = on
             if not on:
-                self.reply.hide()
+                self.reply_area.hide()
         if which == "captions":
             self.captions_on = on
             self.render()
 
     def clear(self) -> None:
-        self.lines.clear()
+        self.entries.clear()
         self.preview = ""
-        self.me = ""
-        self.mine.setText("")
+        self._stick = True
         self.reply.setText("")
-        self.reply.hide()
+        self.reply_area.hide()
         self.render()
 
     def on_event(self, pipeline: str, kind: str, text: str) -> None:
@@ -136,21 +160,29 @@ class Overlay(QWidget):
         if pipeline == "coach":
             if kind in ("reply_partial", "reply"):
                 fs = max(int(self.font_size * 0.8), 14)
-                self.reply.setText(f"<span style='color:#ffd25a; font-size:{fs - 2}px'>💡 Sugestão</span>"
-                                   f"<br><span style='color:#fff3d0; font-size:{fs}px'>"
+                self.reply.setText(f"<span style='color:#ffd25a; font-size:{fs - 3}px'>💡 Sugestão</span> "
+                                   f"<span style='color:#fff3d0; font-size:{fs}px'>"
                                    f"{html.escape(text)}</span>")
-                self.reply.setVisible(self.coach_on)
+                self.reply_area.setVisible(self.coach_on)
+                # altura acompanha o texto (até 130 px; passou disso, rola)
+                w = max(self.reply_area.viewport().width(), 200)
+                self.reply_area.setFixedHeight(min(self.reply.heightForWidth(w) + 4, 130))
             return
         if pipeline == LISTEN:
             # só português na tela: o texto original não aparece
             if kind == "partial_dst":
                 self.preview = text
-            elif kind == "dst":
-                self.lines.append(text)
+            elif kind == "dst" and text:
+                now = time.monotonic()
+                last = self.entries[-1] if self.entries else None
+                if last and last[0] == "them" and now - self._last_them < PARAGRAPH_GAP_S:
+                    last[1] += " " + text  # continua o mesmo parágrafo
+                else:
+                    self.entries.append(["them", text])
+                self._last_them = now
                 self.preview = ""
-        else:
-            if kind in ("partial_dst", "dst"):
-                self.me = text
+        elif kind == "dst" and text:
+            self.entries.append(["me", text])
         self.render()
 
     # --- desenho -------------------------------------------------------------------------
@@ -158,19 +190,28 @@ class Overlay(QWidget):
         fs = self.font_size
         if not self.captions_on:
             self.captions.setText("<span style='color:#666'>legenda desligada</span>")
-        elif not self.lines and not self.preview:
+            return
+        if not self.entries and not self.preview:
             self.captions.setText("<span style='color:#666'>aguardando fala…</span>")
-        else:
-            # legenda corrida: últimas falas confirmadas (branco) + prévia (cinza)
-            done = " ".join(self.lines)
-            if len(done) > self.max_chars:
-                done = "…" + done[-self.max_chars:].split(" ", 1)[-1]
-            self.captions.setText(
-                f"<span style='color:#fff; font-size:{fs}px'>{html.escape(done)}</span> "
-                f"<span style='color:#9a9a9a; font-size:{fs}px'>{html.escape(self.preview)}</span>")
-        if self.me:
-            self.mine.setText(f"<span style='color:#7fd18b; font-size:{max(int(fs * 0.7), 13)}px'>"
-                              f"Você → {html.escape(self.me)}</span>")
+            return
+        small = max(int(fs * 0.7), 13)
+        # prévia continua o último parágrafo, se a pessoa não fez pausa longa
+        attach = bool(self.entries) and self.entries[-1][0] == "them" and             time.monotonic() - self._last_them < PARAGRAPH_GAP_S
+        parts = []
+        for i, (who, text) in enumerate(self.entries):
+            if who == "them":
+                tail = ""
+                if i == len(self.entries) - 1 and self.preview and attach:
+                    tail = f" <span style='color:#9a9a9a'>{html.escape(self.preview)}</span>"
+                parts.append(f"<p style='margin:0 0 8px 0; color:#fff; font-size:{fs}px'>"
+                             f"{html.escape(text)}{tail}</p>")
+            else:
+                parts.append(f"<p style='margin:0 0 8px 0; color:#7fd18b; font-size:{small}px'>"
+                             f"Você → {html.escape(text)}</p>")
+        if self.preview and not attach:
+            parts.append(f"<p style='margin:0; color:#9a9a9a; font-size:{fs}px'>"
+                         f"{html.escape(self.preview)}</p>")
+        self.captions.setText("".join(parts))
 
     def paintEvent(self, _):
         p = QPainter(self)

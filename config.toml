@@ -11,6 +11,8 @@ cable_device = "CABLE Input"  # microfone virtual (VB-Cable). Na call, escolha "
 model = "large-v3-turbo"
 device = "cuda"
 compute_type = "float16"
+# termos que o Whisper deve reconhecer (nomes, tecnologias, empresas)
+hotwords = "React, Next.js, TypeScript, NestJS, React Native, Flutter, Angular, Figma, Tailwind, Playwright, micro-frontends, feature flags, front-end, back-end, full-stack, XP Investimentos, Gengi, Kudo"
 
 [translate]
 ollama_url = "http://127.0.0.1:11434"  # 127.0.0.1, não "localhost": no Windows o localhost soma ~2 s
@@ -35,6 +37,14 @@ voice = "pm_alex"             # vozes PT do Kokoro: pm_alex, pm_santa, pf_dora
 speed = 1.15
 device = ""                   # vazio = o mesmo fone do loopback_device
 
+[coach]
+# Sugestão de resposta: quando a pessoa termina de falar, sugere o que você pode dizer,
+# com base no perfil.md (sua experiência) e na conversa até ali.
+enabled = true
+lang = "pt"                   # idioma da sugestão: "pt" (você fala e o app traduz) ou "en" (para ler)
+turn_gap_s = 1.2              # silêncio da outra pessoa que conta como "terminou de falar"
+profile = "perfil.md"
+
 [vad]
 threshold = 0.5               # 0–1, maior = exige fala mais clara
 silence_ms = 300              # silêncio que fecha uma frase
@@ -47,9 +57,10 @@ font_size = 22
 opacity = 0.88
 history = 3                   # quantas legendas ficam na tela
 partials = true               # prévia já traduzida (cinza) enquanto a pessoa fala
-partial_every_s = 0.6         # de quanto em quanto tempo a prévia atualiza
+partial_every_s = 0.45        # de quanto em quanto tempo a prévia atualiza
 
 [hotkeys]
 toggle_mic = "<ctrl>+<alt>+m"      # liga/desliga a tradução da sua fala
 toggle_captions = "<ctrl>+<alt>+l" # liga/desliga a legenda
 toggle_dub = "<ctrl>+<alt>+d"      # liga/desliga a dublagem em português no fone
+toggle_coach = "<ctrl>+<alt>+r"    # liga/desliga a sugestão de resposta

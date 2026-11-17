@@ -68,3 +68,11 @@ A janela é arrastável e redimensionável pelo canto.
 - **Avise a outra pessoa** que você está usando tradução automática; ela vai notar o atraso.
 - **Ajustes** ficam no `config.toml`: voz, sensibilidade do VAD, silêncio que fecha a frase, modelo de tradução.
 - **Log:** fica em `call-tradutor.log`, com tempo de cada etapa (`stt`, `tr`, `out`).
+
+## Sugestão de resposta
+
+Quando a outra pessoa termina de falar (`turn_gap_s` de silêncio), aparece um bloco **💡 Sugestão** com o que você pode responder. Ele usa a conversa até ali e o seu `perfil.md` (experiência, stack, casos para contar). O modelo só usa fatos do perfil e, se não souber, sugere uma resposta honesta.
+
+- `perfil.md` fica fora do git (tem dados pessoais). Edite à vontade: quanto mais casos concretos, melhores as sugestões.
+- `Ctrl+Alt+R` ou o botão 💡 liga e desliga.
+- `[coach] lang = "en"` faz a sugestão sair em inglês, para ler em voz alta.

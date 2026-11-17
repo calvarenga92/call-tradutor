@@ -46,6 +46,20 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
         except Exception as e:  # noqa: BLE001
             raise RuntimeError(f"Ollama não respondeu em {t['ollama_url']} — ele está aberto? ({e})")
 
+        # sugestão de resposta: recebe os mesmos eventos que a tela
+        c = cfg.get("coach", {})
+        if c.get("enabled"):
+            from .coach import Coach
+
+            coach = Coach(t["ollama_url"], t["model"], ROOT / c.get("profile", "perfil.md"),
+                          bridge.event.emit, lang=c.get("lang", "pt"),
+                          turn_gap_s=c.get("turn_gap_s", 1.2))
+            pipelines["coach"] = coach
+
+            def on_event(p: str, k: str, txt: str) -> None:
+                bridge.event.emit(p, k, txt)
+                coach.feed(p, k, txt)
+
         seg_args = dict(threshold=v["threshold"], silence_ms=v["silence_ms"],
                         min_speech_ms=v["min_speech_ms"], soft_max_s=v["soft_max_s"],
                         max_utterance_s=v["max_utterance_s"])
@@ -113,6 +127,7 @@ def start_hotkeys(cfg: dict, bridge: Bridge) -> None:
         hk["toggle_mic"]: lambda: bridge.toggle.emit("mic"),
         hk["toggle_captions"]: lambda: bridge.toggle.emit("captions"),
         hk["toggle_dub"]: lambda: bridge.toggle.emit("dub"),
+        hk["toggle_coach"]: lambda: bridge.toggle.emit("coach"),
     }).start()
 
 
@@ -140,6 +155,14 @@ def main() -> None:
             p = pipelines.get(SPEAK)
             if p:
                 win.set_toggle("mic", p.toggle())
+        elif which == "coach":
+            coach = pipelines.get("coach")
+            if coach:
+                if coach.enabled.is_set():
+                    coach.enabled.clear()
+                else:
+                    coach.enabled.set()
+                win.set_toggle("coach", coach.enabled.is_set())
         elif which == "dub":
             if dub_on.is_set():
                 dub_on.clear()
@@ -152,6 +175,9 @@ def main() -> None:
     bridge.toggle.connect(on_toggle)
     if args.so_legenda:
         win.btn_mic.hide()
+    if not cfg.get("coach", {}).get("enabled"):
+        win.btn_coach.hide()
+        win.reply.hide()
     if cfg["dub"]["enabled"]:
         win.set_toggle("dub", dub_on.is_set())
     else:

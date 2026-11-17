@@ -13,12 +13,13 @@ HALLUCINATIONS = {
 
 
 class STT:
-    def __init__(self, model: str, device: str, compute_type: str):
+    def __init__(self, model: str, device: str, compute_type: str, hotwords: str = ""):
         self.model = WhisperModel(model, device=device, compute_type=compute_type)
+        self.hotwords = hotwords or None
         self.lock = threading.Lock()
 
-    def transcribe(self, audio: np.ndarray, lang: str | None,
-                   blocking: bool = True) -> tuple[str, str] | None:
+    def transcribe(self, audio: np.ndarray, lang: str | None, blocking: bool = True,
+                   prompt: str | None = None) -> tuple[str, str] | None:
         """Retorna (texto, idioma). `lang=None` detecta o idioma.
 
         Retorna None se `blocking=False` e a GPU estiver ocupada.
@@ -33,6 +34,9 @@ class STT:
                 vad_filter=False,
                 condition_on_previous_text=False,
                 without_timestamps=True,
+                # o fim do trecho anterior dá contexto: frase cortada no meio continua coerente
+                initial_prompt=prompt or None,
+                hotwords=self.hotwords,
             )
             parts = [
                 s.text.strip()

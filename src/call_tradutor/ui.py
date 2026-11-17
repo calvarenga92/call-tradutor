@@ -14,7 +14,7 @@ class Bridge(QObject):
     """Ponte thread-safe: as threads de áudio emitem, a UI recebe na thread do Qt."""
     event = Signal(str, str, str)    # pipeline, tipo, texto
     status = Signal(str, bool)       # mensagem, é erro?
-    toggle = Signal(str)             # "mic" | "captions" | "dub"
+    toggle = Signal(str)             # "mic" | "captions" | "dub" | "coach"
 
 
 BTN_STYLE = """
@@ -35,13 +35,14 @@ class Overlay(QWidget):
         self.preview = ""
         self.me = ""
         self.captions_on = True
+        self.coach_on = True
         self._drag: QPoint | None = None
 
         self.setWindowTitle("call-tradutor")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet(BTN_STYLE)
-        self.resize(760, 260)
+        self.resize(820, 360)
 
         self.status = QLabel("carregando…")
         self.status.setStyleSheet("color:#aaa; font-size:12px;")
@@ -49,6 +50,8 @@ class Overlay(QWidget):
         self.btn_cap = QPushButton("💬 Legenda: ON")
         self.btn_dub = QPushButton("🔊 Dublagem: ON")
         self.btn_dub.clicked.connect(lambda: bridge.toggle.emit("dub"))
+        self.btn_coach = QPushButton("💡 Resposta: ON")
+        self.btn_coach.clicked.connect(lambda: bridge.toggle.emit("coach"))
         btn_close = QPushButton("✕")
         self.btn_mic.clicked.connect(lambda: bridge.toggle.emit("mic"))
         self.btn_cap.clicked.connect(lambda: bridge.toggle.emit("captions"))
@@ -59,12 +62,20 @@ class Overlay(QWidget):
         top.addWidget(self.btn_mic)
         top.addWidget(self.btn_cap)
         top.addWidget(self.btn_dub)
+        top.addWidget(self.btn_coach)
         top.addWidget(btn_close)
 
         self.captions = QLabel()
         self.captions.setWordWrap(True)
         self.captions.setTextFormat(Qt.RichText)
         self.captions.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+        # bloco de sugestão de resposta
+        self.reply = QLabel()
+        self.reply.setWordWrap(True)
+        self.reply.setTextFormat(Qt.RichText)
+        self.reply.setStyleSheet("background: rgba(255, 210, 90, 0.10); border-radius: 8px;"
+                                 "padding: 8px;")
+        self.reply.hide()
         self.mine = QLabel()
         self.mine.setWordWrap(True)
         self.mine.setTextFormat(Qt.RichText)
@@ -77,6 +88,7 @@ class Overlay(QWidget):
         layout.setContentsMargins(14, 8, 8, 8)
         layout.addLayout(top)
         layout.addWidget(self.captions, 1)
+        layout.addWidget(self.reply)
         layout.addLayout(bottom)
 
         bridge.event.connect(self.on_event)
@@ -90,11 +102,16 @@ class Overlay(QWidget):
 
     def set_toggle(self, which: str, on: bool) -> None:
         btn, label = {"mic": (self.btn_mic, "🎤 Fala"), "captions": (self.btn_cap, "💬 Legenda"),
-                      "dub": (self.btn_dub, "🔊 Dublagem")}[which]
+                      "dub": (self.btn_dub, "🔊 Dublagem"),
+                      "coach": (self.btn_coach, "💡 Resposta")}[which]
         btn.setText(f"{label}: {'ON' if on else 'OFF'}")
         btn.setProperty("off", not on)
         btn.style().unpolish(btn)
         btn.style().polish(btn)
+        if which == "coach":
+            self.coach_on = on
+            if not on:
+                self.reply.hide()
         if which == "captions":
             self.captions_on = on
             self.render()
@@ -102,6 +119,14 @@ class Overlay(QWidget):
     def on_event(self, pipeline: str, kind: str, text: str) -> None:
         if kind == "error":
             self.set_status(f"{pipeline}: {text}", error=True)
+            return
+        if pipeline == "coach":
+            if kind in ("reply_partial", "reply"):
+                fs = max(int(self.font_size * 0.8), 14)
+                self.reply.setText(f"<span style='color:#ffd25a; font-size:{fs - 2}px'>💡 Sugestão</span>"
+                                   f"<br><span style='color:#fff3d0; font-size:{fs}px'>"
+                                   f"{html.escape(text)}</span>")
+                self.reply.setVisible(self.coach_on)
             return
         if pipeline == LISTEN:
             # só português na tela: o texto original não aparece

@@ -40,6 +40,7 @@ class Pipeline:
         self._partial: np.ndarray | None = None
         self._partial_lock = threading.Lock()
         # idioma detectado fica "travado" por alguns trechos: detectar custa ~250 ms cada vez
+        self._prev_text = ""     # fim do trecho anterior, contexto para o Whisper
         self._lang: str | None = None
         self._lang_left = 0
 
@@ -109,10 +110,11 @@ class Pipeline:
     def _do_partial(self) -> None:
         with self._partial_lock:
             audio, self._partial = self._partial, None
-        if audio is None:
-            return
-        res = self.stt.transcribe(audio, self._lang_hint(), blocking=False)
-        if not res or not res[0] or not self.finals.empty():
+        if audio is None or len(audio) < 16000:
+            return  # menos de 1 s de áudio: o Whisper chuta e a prévia sai errada
+        res = self.stt.transcribe(audio, self._lang_hint(), blocking=False,
+                                  prompt=self._prev_text)
+        if not res or len(res[0].split()) < 2 or not self.finals.empty():
             return
         text, lang = res
         self.on_event(self.name, "partial_src", text)
@@ -126,10 +128,11 @@ class Pipeline:
     def _do_final(self, audio: np.ndarray) -> None:
         t0 = time.perf_counter()
         hint = self._lang_hint()
-        text, lang = self.stt.transcribe(audio, hint)
+        text, lang = self.stt.transcribe(audio, hint, prompt=self._prev_text)
         t1 = time.perf_counter()
         if text:
             self._learn_lang(lang, detected=hint is None)
+            self._prev_text = text[-200:]
         if not text:
             self.on_event(self.name, "partial_src", "")
             return

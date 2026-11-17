@@ -52,8 +52,7 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
             from .coach import Coach
 
             coach = Coach(t["ollama_url"], t["model"], ROOT / c.get("profile", "perfil.md"),
-                          bridge.event.emit, lang=c.get("lang", "pt"),
-                          turn_gap_s=c.get("turn_gap_s", 1.2))
+                          bridge.event.emit, turn_gap_s=c.get("turn_gap_s", 1.2))
             pipelines["coach"] = coach
 
             def on_event(p: str, k: str, txt: str) -> None:

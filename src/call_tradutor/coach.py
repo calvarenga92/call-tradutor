@@ -2,6 +2,7 @@
 usando o seu perfil profissional (perfil.md) e o histórico recente da conversa."""
 import json
 import logging
+import re
 import threading
 import time
 from collections import deque
@@ -15,8 +16,11 @@ from .ui import LISTEN, SPEAK
 log = logging.getLogger("coach")
 
 SYSTEM = """You help {name} during a live professional call (job interview, client or team meeting).
-When the other person finishes speaking, write what {name} could say next, in the first person, \
-in {lang}.
+When the other person finishes speaking, write what {name} could say next, in the first person.
+Write it in English (what he will say) and then the same answer in Brazilian Portuguese \
+(so he understands exactly what he is saying), in exactly this format:
+EN: <answer in English>
+PT: <the same answer in Brazilian Portuguese>
 
 Rules:
 - Use ONLY facts from the profile below. Never invent companies, numbers, dates or technologies. \
@@ -25,19 +29,31 @@ experience that IS in the profile.
 - Sound like a person talking, not like a document: 2 to 4 short sentences, no lists, no markdown.
 - Go straight to the point. Prefer one concrete example (situation, what he did, result).
 - For small talk or logistics (greetings, scheduling, "can you hear me?"), answer in one short sentence.
-- Reply with the suggested answer only.
+- Never add motivations, feelings or opinions that are not written in the profile. For "why" \
+questions, use the reasons written in the profile, in the same terms.
+- The EN line MUST be in English, even though the profile and Claudio's lines are in Portuguese.
+- Use simple, clear English that is easy to say out loud.
+- Reply with the two lines only.
 
 PROFILE:
 {profile}"""
 
-LANGS = {"pt": "Brazilian Portuguese", "en": "English"}
+SEP = "\x1f"  # separa EN e PT no evento enviado para a tela
+
+
+def split_reply(raw: str) -> tuple[str, str]:
+    """Separa "EN: ... PT: ..." (funciona também com texto ainda incompleto, durante o stream)."""
+    m = re.search(r"\bPT\s*:", raw)
+    en, pt = (raw[:m.start()], raw[m.end():]) if m else (raw, "")
+    en = re.sub(r"^\s*EN\s*:\s*", "", en).strip()
+    return en, pt.strip()
 
 
 class Coach:
     def __init__(self, url: str, model: str, profile_path: Path, on_event: Callable,
-                 lang: str = "pt", turn_gap_s: float = 1.2, history: int = 10, name: str = "Claudio"):
+                 turn_gap_s: float = 1.2, history: int = 10, name: str = "Claudio"):
         profile = profile_path.read_text(encoding="utf-8") if profile_path.exists() else ""
-        self.system = SYSTEM.format(name=name, lang=LANGS.get(lang, lang), profile=profile)
+        self.system = SYSTEM.format(name=name, profile=profile)
         self.url = url.rstrip("/") + "/api/chat"
         self.model = model
         self.on_event = on_event
@@ -99,10 +115,11 @@ class Coach:
         messages = [
             {"role": "system", "content": self.system},
             {"role": "user", "content": f"Conversation so far:\n{transcript}\n\n"
-                                        "What should Claudio say next?"},
+                                        "What should Claudio say next? Answer with the EN: line "
+                                        "(in English) and the PT: line."},
         ]
         body = {"model": self.model, "messages": messages, "stream": True, "keep_alive": "60m",
-                "options": {"temperature": 0.4, "num_predict": 160}}
+                "options": {"temperature": 0.4, "num_predict": 360}}
         if self.model.startswith(("qwen3", "deepseek-r1")):
             body["think"] = False
         t0 = time.perf_counter()
@@ -120,8 +137,9 @@ class Coach:
                     continue
                 chunk = json.loads(line)
                 out += chunk.get("message", {}).get("content", "")
-                self.on_event("coach", "reply_partial", out.strip())
+                self.on_event("coach", "reply_partial", SEP.join(split_reply(out)))
                 if chunk.get("done"):
                     break
-        self.on_event("coach", "reply", out.strip())
-        log.info("coach %dms | %s", (time.perf_counter() - t0) * 1000, out.strip())
+        en, pt = split_reply(out)
+        self.on_event("coach", "reply", SEP.join((en, pt)))
+        log.info("coach %dms | EN: %s | PT: %s", (time.perf_counter() - t0) * 1000, en, pt)

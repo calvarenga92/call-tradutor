@@ -160,9 +160,12 @@ class Overlay(QWidget):
         if pipeline == "coach":
             if kind in ("reply_partial", "reply"):
                 fs = max(int(self.font_size * 0.8), 14)
-                self.reply.setText(f"<span style='color:#ffd25a; font-size:{fs - 3}px'>💡 Sugestão</span> "
-                                   f"<span style='color:#fff3d0; font-size:{fs}px'>"
-                                   f"{html.escape(text)}</span>")
+                en, _, pt = text.partition("")
+                self.reply.setText(
+                    f"<span style='color:#ffd25a; font-size:{fs - 3}px'>💡 Diga:</span> "
+                    f"<span style='color:#fff3d0; font-size:{fs}px'><b>{html.escape(en)}</b></span>"
+                    + (f"<br><span style='color:#bfb08a; font-size:{fs - 3}px'>{html.escape(pt)}</span>"
+                       if pt else ""))
                 self.reply_area.setVisible(self.coach_on)
                 # altura acompanha o texto (até 130 px; passou disso, rola)
                 w = max(self.reply_area.viewport().width(), 200)

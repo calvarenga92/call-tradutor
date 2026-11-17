@@ -31,7 +31,7 @@ experience that IS in the profile.
 - For small talk or logistics (greetings, scheduling, "can you hear me?"), answer in one short sentence.
 - Never add motivations, feelings or opinions that are not written in the profile. For "why" \
 questions, use the reasons written in the profile, in the same terms.
-- The EN line MUST be in English, even though the profile and Claudio's lines are in Portuguese.
+- The EN line MUST be in English, even though the profile and {name}'s lines are in Portuguese.
 - Use simple, clear English that is easy to say out loud.
 - Reply with the two lines only.
 
@@ -51,8 +51,9 @@ def split_reply(raw: str) -> tuple[str, str]:
 
 class Coach:
     def __init__(self, url: str, model: str, profile_path: Path, on_event: Callable,
-                 turn_gap_s: float = 1.2, history: int = 10, name: str = "Claudio"):
+                 turn_gap_s: float = 1.2, history: int = 10, name: str = "Me"):
         profile = profile_path.read_text(encoding="utf-8") if profile_path.exists() else ""
+        self.name = name
         self.system = SYSTEM.format(name=name, profile=profile)
         self.url = url.rstrip("/") + "/api/chat"
         self.model = model
@@ -110,12 +111,12 @@ class Coach:
                 self.on_event("coach", "error", f"sugestão: {e}")
 
     def _suggest(self, convo: list[tuple[str, str]], gen: int) -> None:
-        transcript = "\n".join(f"{'Other person' if who == 'them' else 'Claudio'}: {t}"
+        transcript = "\n".join(f"{'Other person' if who == 'them' else self.name}: {t}"
                                for who, t in convo)
         messages = [
             {"role": "system", "content": self.system},
             {"role": "user", "content": f"Conversation so far:\n{transcript}\n\n"
-                                        "What should Claudio say next? Answer with the EN: line "
+                                        f"What should {self.name} say next? Answer with the EN: line "
                                         "(in English) and the PT: line."},
         ]
         body = {"model": self.model, "messages": messages, "stream": True, "keep_alive": "60m",

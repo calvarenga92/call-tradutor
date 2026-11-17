@@ -41,6 +41,7 @@ device = ""                   # vazio = o mesmo fone do loopback_device
 # Sugestão de resposta: quando a pessoa termina de falar, sugere o que você pode dizer,
 # com base no perfil.md (sua experiência) e na conversa até ali.
 enabled = true
+name = "Claudio"              # seu nome, como aparece na conversa
 turn_gap_s = 1.2              # silêncio da outra pessoa que conta como "terminou de falar"
 profile = "perfil.md"
 

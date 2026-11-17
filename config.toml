@@ -3,8 +3,8 @@
 # Rode `python scripts/listar_dispositivos.py` para ver os nomes disponíveis.
 
 [audio]
-loopback_device = ""          # saída que você ouve (fone). Vazio = saída padrão
-mic_device = ""               # seu microfone. Vazio = microfone padrão
+loopback_device = "Fifine"    # saída que você ouve (fone). Vazio = saída padrão
+mic_device = "Fifine"         # seu microfone. Vazio = microfone padrão
 cable_device = "CABLE Input"  # microfone virtual (VB-Cable). Na call, escolha "CABLE Output" como microfone
 
 [stt]

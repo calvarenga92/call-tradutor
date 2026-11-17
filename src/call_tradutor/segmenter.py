@@ -1,4 +1,11 @@
-"""Corta o áudio contínuo em frases usando o Silero VAD (o mesmo que vem no faster-whisper)."""
+"""Corta o áudio contínuo em trechos curtos usando o Silero VAD (o mesmo do faster-whisper).
+
+Trechos curtos = tradução rápida. Regras para fechar um trecho:
+- silêncio de `silence_ms` (fim de frase normal);
+- depois de `soft_max_s`, qualquer queda na fala (respiração, fim de palavra);
+- em `max_utterance_s`, corta no ponto de fala mais fraca do último 1,5 s e
+  continua o resto no trecho seguinte (para quem fala sem parar).
+"""
 import numpy as np
 from faster_whisper.vad import get_vad_model
 
@@ -27,26 +34,31 @@ class StreamingVAD:
         return float(np.asarray(out).reshape(-1)[0])
 
 
+def _blocks(ms: float) -> int:
+    return max(int(ms // BLOCK_MS), 1)
+
+
 class Segmenter:
     """Recebe blocos de 32 ms e devolve eventos ("partial" | "final", áudio)."""
 
-    def __init__(self, threshold=0.5, silence_ms=600, min_speech_ms=250,
-                 max_utterance_s=15, partial_every_s: float | None = 1.0, preroll_ms=300):
+    def __init__(self, threshold=0.5, silence_ms=400, min_speech_ms=250, soft_max_s=3.0,
+                 max_utterance_s=5.0, partial_every_s: float | None = 0.8, preroll_ms=300):
         self.vad = StreamingVAD()
         self.on = threshold
         self.off = max(threshold - 0.15, 0.05)
-        self.silence_blocks = silence_ms // BLOCK_MS
-        self.min_speech_blocks = min_speech_ms // BLOCK_MS
-        self.max_blocks = int(max_utterance_s * 1000 // BLOCK_MS)
-        self.long_blocks = 5000 // BLOCK_MS
-        self.short_silence = min(250 // BLOCK_MS, self.silence_blocks)
-        self.partial_blocks = int(partial_every_s * 1000 // BLOCK_MS) if partial_every_s else 0
-        self.preroll_blocks = preroll_ms // BLOCK_MS
+        self.silence_blocks = _blocks(silence_ms)
+        self.min_speech_blocks = _blocks(min_speech_ms)
+        self.soft_blocks = _blocks(soft_max_s * 1000)
+        self.max_blocks = _blocks(max_utterance_s * 1000)
+        self.cut_window = _blocks(1500)
+        self.partial_blocks = _blocks(partial_every_s * 1000) if partial_every_s else 0
+        self.preroll_blocks = _blocks(preroll_ms)
         self._reset_state()
 
     def _reset_state(self) -> None:
         self.speaking = False
         self.buf: list[np.ndarray] = []
+        self.probs: list[float] = []
         self.preroll: list[np.ndarray] = []
         self.silent = 0
         self.voiced = 0
@@ -58,7 +70,7 @@ class Segmenter:
 
     def feed(self, block: np.ndarray) -> list[tuple[str, np.ndarray]]:
         p = self.vad.prob(block)
-        events = []
+        events: list[tuple[str, np.ndarray]] = []
 
         if not self.speaking:
             self.preroll.append(block)
@@ -66,12 +78,14 @@ class Segmenter:
             if p >= self.on:
                 self.speaking = True
                 self.buf = list(self.preroll)
+                self.probs = [0.0] * (len(self.buf) - 1) + [p]
                 self.voiced = 1
                 self.silent = 0
                 self.since_partial = 0
             return events
 
         self.buf.append(block)
+        self.probs.append(p)
         self.since_partial += 1
         if p >= self.off:
             self.voiced += 1
@@ -79,14 +93,20 @@ class Segmenter:
         else:
             self.silent += 1
 
-        # frase já longa (> 5 s): uma pausa curta basta para fechar, senão a legenda atrasa
-        needed = self.silence_blocks if len(self.buf) < self.long_blocks else self.short_silence
-        if self.silent >= needed or len(self.buf) >= self.max_blocks:
+        n = len(self.buf)
+        if self.silent >= self.silence_blocks or (n >= self.soft_blocks and p < self.on):
             if self.voiced >= self.min_speech_blocks:
-                # corta o silêncio do fim, deixando ~150 ms
-                keep = len(self.buf) - max(self.silent - 5, 0)
+                keep = n - max(self.silent - 4, 0)  # tira o silêncio do fim, deixa ~130 ms
                 events.append(("final", np.concatenate(self.buf[:keep])))
             self._reset_state()
+        elif n >= self.max_blocks:
+            # fala contínua: corta no ponto mais "fraco" do fim e segue com o resto
+            window = self.probs[-self.cut_window:]
+            cut = n - len(window) + int(np.argmin(window)) + 1
+            events.append(("final", np.concatenate(self.buf[:cut])))
+            self.buf, self.probs = self.buf[cut:], self.probs[cut:]
+            self.voiced = len(self.buf)
+            self.since_partial = 0
         elif self.partial_blocks and self.since_partial >= self.partial_blocks:
             self.since_partial = 0
             events.append(("partial", np.concatenate(self.buf)))

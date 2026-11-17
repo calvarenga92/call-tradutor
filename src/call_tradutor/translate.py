@@ -33,7 +33,9 @@ class Translator:
             json={"model": self.model, "keep_alive": "60m"},
         )
 
-    def translate(self, text: str, on_partial: Callable[[str], None] | None = None) -> str:
+    def translate(self, text: str, on_partial: Callable[[str], None] | None = None,
+                  remember: bool = True) -> str:
+        """`remember=False` para traduções provisórias, que não entram no contexto."""
         messages = [{"role": "system", "content": self.system}]
         for src, dst in self.history:
             messages += [{"role": "user", "content": src}, {"role": "assistant", "content": dst}]
@@ -62,5 +64,6 @@ class Translator:
                 if chunk.get("done"):
                     break
         out = out.strip().strip('"').strip()
-        self.history.append((text, out))
+        if remember:
+            self.history.append((text, out))
         return out

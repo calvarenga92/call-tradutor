@@ -29,22 +29,24 @@ voices_path = "models/voices-v1.0.bin"
 [dub]
 # Dublagem: o que a pessoa fala em inglês sai também em áudio, em português, no seu fone.
 # Enquanto a dublagem toca, a captura da call pausa (senão o programa ouviria a si mesmo).
-enabled = true
+enabled = true               # carrega a dublagem (botão 🔊 / Ctrl+Alt+D liga e desliga)
+start_on = false              # começa desligada: em fala contínua a dublagem não acompanha
 voice = "pm_alex"             # vozes PT do Kokoro: pm_alex, pm_santa, pf_dora
 speed = 1.15
 device = ""                   # vazio = o mesmo fone do loopback_device
 
 [vad]
 threshold = 0.5               # 0–1, maior = exige fala mais clara
-silence_ms = 600              # silêncio que fecha uma frase
+silence_ms = 400              # silêncio que fecha uma frase
 min_speech_ms = 250           # ignora ruídos mais curtos que isso
-max_utterance_s = 15          # corta frases muito longas
+soft_max_s = 3.0              # depois disso, qualquer respiração já fecha o trecho
+max_utterance_s = 5.0         # corte forçado para quem fala sem parar
 
 [ui]
 font_size = 22
 opacity = 0.88
 history = 3                   # quantas legendas ficam na tela
-partials = true               # mostra o inglês parcial enquanto a pessoa fala
+partials = true               # tradução provisória (cinza) enquanto a pessoa fala
 
 [hotkeys]
 toggle_mic = "<ctrl>+<alt>+m"      # liga/desliga a tradução da sua fala

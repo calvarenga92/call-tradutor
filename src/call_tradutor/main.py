@@ -41,8 +41,9 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
             raise RuntimeError(f"Ollama não respondeu em {t['ollama_url']} — ele está aberto? ({e})")
 
         seg_args = dict(threshold=v["threshold"], silence_ms=v["silence_ms"],
-                        min_speech_ms=v["min_speech_ms"], max_utterance_s=v["max_utterance_s"])
-        partial = 1.0 if ui["partials"] else None
+                        min_speech_ms=v["min_speech_ms"], soft_max_s=v["soft_max_s"],
+                        max_utterance_s=v["max_utterance_s"])
+        partial = 1.5 if ui["partials"] else None
         d = cfg["dub"]
         cable = None if only_captions else audio.get_cable(a["cable_device"])
 
@@ -68,7 +69,8 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
 
         pipelines[LISTEN] = Pipeline(
             LISTEN, loop_dev, None, stt, listen_tr, Segmenter(**seg_args, partial_every_s=partial),
-            on_event, output=dub, mute_when=dub_player.playing if dub_player else None)
+            on_event, output=dub, mute_when=dub_player.playing if dub_player else None,
+            translate_partials=bool(partial))
         pipelines[LISTEN].start()
         status = f"ouvindo: {loop_name}" + ("  ·  dublagem PT" if dub_player else "")
 
@@ -84,7 +86,7 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
 
             speak_tr = Translator(t["ollama_url"], t["model"], "pt", "en", t["context_turns"])
             pipelines[SPEAK] = Pipeline(
-                SPEAK, mic_dev, "pt", stt, speak_tr, Segmenter(**seg_args, partial_every_s=partial),
+                SPEAK, mic_dev, "pt", stt, speak_tr, Segmenter(**seg_args, partial_every_s=None),
                 on_event, output=to_cable)
             pipelines[SPEAK].start()
             status += f"  ·  mic: {mic_name}" + (" → VB-Cable" if cable else " (sem VB-Cable: só texto)")
@@ -124,7 +126,8 @@ def main() -> None:
     win = Overlay(bridge, cfg["ui"]["font_size"], cfg["ui"]["opacity"], cfg["ui"]["history"])
     pipelines: dict = {}
     dub_on = threading.Event()
-    dub_on.set()
+    if cfg["dub"]["enabled"] and cfg["dub"].get("start_on", False):
+        dub_on.set()
 
     def on_toggle(which: str) -> None:
         if which == "mic":
@@ -143,6 +146,10 @@ def main() -> None:
     bridge.toggle.connect(on_toggle)
     if args.so_legenda:
         win.btn_mic.hide()
+    if cfg["dub"]["enabled"]:
+        win.set_toggle("dub", dub_on.is_set())
+    else:
+        win.btn_dub.hide()
     win.show()
 
     threading.Thread(target=boot, args=(cfg, bridge, args.so_legenda, pipelines, dub_on),

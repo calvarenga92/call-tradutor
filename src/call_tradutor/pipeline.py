@@ -22,7 +22,7 @@ class Pipeline:
     def __init__(self, name: str, device, src: str | None, stt: STT, translator: Translator,
                  segmenter: Segmenter, on_event: EventFn,
                  output: Callable[[str], None] | None = None,
-                 mute_when: threading.Event | None = None):
+                 mute_when: threading.Event | None = None, translate_partials: bool = False):
         self.name = name
         self.device = device
         self.src = src
@@ -32,6 +32,7 @@ class Pipeline:
         self.on_event = on_event
         self.output = output
         self.mute_when = mute_when  # ex.: dublagem tocando no fone → não captar o próprio áudio
+        self.translate_partials = translate_partials
         self.enabled = threading.Event()
         self.enabled.set()
         self.stop = threading.Event()
@@ -93,8 +94,16 @@ class Pipeline:
         if audio is None:
             return
         res = self.stt.transcribe(audio, self.src, blocking=False)
-        if res and res[0] and self.finals.empty():
-            self.on_event(self.name, "partial_src", res[0])
+        if not res or not res[0] or not self.finals.empty():
+            return
+        text, lang = res
+        self.on_event(self.name, "partial_src", text)
+        if self.translate_partials:
+            # prévia já traduzida; se chegar um trecho final no meio, ele tem prioridade
+            preview = text if lang == self.translator.dst else \
+                self.translator.translate(text, remember=False)
+            if preview and self.finals.empty():
+                self.on_event(self.name, "partial_dst", preview)
 
     def _do_final(self, audio: np.ndarray) -> None:
         t0 = time.perf_counter()

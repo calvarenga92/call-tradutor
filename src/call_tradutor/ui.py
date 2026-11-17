@@ -30,9 +30,10 @@ class Overlay(QWidget):
         super().__init__()
         self.font_size = font_size
         self.opacity = opacity
-        self.history: deque[tuple[str, str]] = deque(maxlen=history)
-        self.current = {"partial": "", "src": "", "dst": ""}
-        self.me = {"src": "", "dst": ""}
+        self.lines: deque[str] = deque(maxlen=history * 4)
+        self.max_chars = history * 110
+        self.preview = ""
+        self.me = ""
         self.captions_on = True
         self._drag: QPoint | None = None
 
@@ -103,52 +104,35 @@ class Overlay(QWidget):
             self.set_status(f"{pipeline}: {text}", error=True)
             return
         if pipeline == LISTEN:
-            c = self.current
-            if kind == "partial_src":
-                c["partial"] = text
-            elif kind == "src":
-                c.update(src=text, partial="", dst="")
-            elif kind == "partial_dst":
-                c["dst"] = text
+            # só português na tela: o texto original não aparece
+            if kind == "partial_dst":
+                self.preview = text
             elif kind == "dst":
-                self.history.append((c["src"], text))
-                c.update(src="", partial="", dst="")
+                self.lines.append(text)
+                self.preview = ""
         else:
-            if kind == "partial_src":
-                if text:
-                    self.me.update(src=text, dst="…")
-            elif kind == "src":
-                self.me.update(src=text, dst="…")
-            elif kind in ("partial_dst", "dst"):
-                self.me["dst"] = text
+            if kind in ("partial_dst", "dst"):
+                self.me = text
         self.render()
 
     # --- desenho -------------------------------------------------------------------------
-    def _entry(self, src: str, dst: str) -> str:
-        fs, small = self.font_size, max(int(self.font_size * 0.6), 11)
-        return (f"<div style='margin-bottom:6px'>"
-                f"<span style='color:#fff; font-size:{fs}px'>{html.escape(dst)}</span><br>"
-                f"<span style='color:#8a8a8a; font-size:{small}px'>{html.escape(src)}</span>"
-                f"</div>")
-
     def render(self) -> None:
+        fs = self.font_size
         if not self.captions_on:
             self.captions.setText("<span style='color:#666'>legenda desligada</span>")
+        elif not self.lines and not self.preview:
+            self.captions.setText("<span style='color:#666'>aguardando fala…</span>")
         else:
-            parts = [self._entry(s, d) for s, d in self.history]
-            c = self.current
-            if c["src"]:
-                parts.append(self._entry(c["src"], c["dst"] or "…"))
-            elif c["partial"]:
-                small = max(int(self.font_size * 0.6), 11)
-                parts.append(f"<i style='color:#9a9a9a; font-size:{small}px'>"
-                             f"{html.escape(c['partial'])}</i>")
-            self.captions.setText("".join(parts) or
-                                  "<span style='color:#666'>aguardando fala…</span>")
-        if self.me["src"]:
-            self.mine.setText(f"<span style='color:#7fd18b; font-size:{max(int(self.font_size * 0.7), 13)}px'>Você: "
-                              f"{html.escape(self.me['src'])} → <b>{html.escape(self.me['dst'])}</b>"
-                              f"</span>")
+            # legenda corrida: últimas falas confirmadas (branco) + prévia (cinza)
+            done = " ".join(self.lines)
+            if len(done) > self.max_chars:
+                done = "…" + done[-self.max_chars:].split(" ", 1)[-1]
+            self.captions.setText(
+                f"<span style='color:#fff; font-size:{fs}px'>{html.escape(done)}</span> "
+                f"<span style='color:#9a9a9a; font-size:{fs}px'>{html.escape(self.preview)}</span>")
+        if self.me:
+            self.mine.setText(f"<span style='color:#7fd18b; font-size:{max(int(fs * 0.7), 13)}px'>"
+                              f"Você → {html.escape(self.me)}</span>")
 
     def paintEvent(self, _):
         p = QPainter(self)

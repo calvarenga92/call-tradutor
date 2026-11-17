@@ -14,7 +14,7 @@ class Bridge(QObject):
     """Ponte thread-safe: as threads de áudio emitem, a UI recebe na thread do Qt."""
     event = Signal(str, str, str)    # pipeline, tipo, texto
     status = Signal(str, bool)       # mensagem, é erro?
-    toggle = Signal(str)             # "mic" | "captions"
+    toggle = Signal(str)             # "mic" | "captions" | "dub"
 
 
 BTN_STYLE = """
@@ -46,6 +46,8 @@ class Overlay(QWidget):
         self.status.setStyleSheet("color:#aaa; font-size:12px;")
         self.btn_mic = QPushButton("🎤 Fala: ON")
         self.btn_cap = QPushButton("💬 Legenda: ON")
+        self.btn_dub = QPushButton("🔊 Dublagem: ON")
+        self.btn_dub.clicked.connect(lambda: bridge.toggle.emit("dub"))
         btn_close = QPushButton("✕")
         self.btn_mic.clicked.connect(lambda: bridge.toggle.emit("mic"))
         self.btn_cap.clicked.connect(lambda: bridge.toggle.emit("captions"))
@@ -55,6 +57,7 @@ class Overlay(QWidget):
         top.addWidget(self.status, 1)
         top.addWidget(self.btn_mic)
         top.addWidget(self.btn_cap)
+        top.addWidget(self.btn_dub)
         top.addWidget(btn_close)
 
         self.captions = QLabel()
@@ -85,8 +88,8 @@ class Overlay(QWidget):
         self.status.setStyleSheet(f"color:{'#f77' if error else '#aaa'}; font-size:12px;")
 
     def set_toggle(self, which: str, on: bool) -> None:
-        btn = self.btn_mic if which == "mic" else self.btn_cap
-        label = "🎤 Fala" if which == "mic" else "💬 Legenda"
+        btn, label = {"mic": (self.btn_mic, "🎤 Fala"), "captions": (self.btn_cap, "💬 Legenda"),
+                      "dub": (self.btn_dub, "🔊 Dublagem")}[which]
         btn.setText(f"{label}: {'ON' if on else 'OFF'}")
         btn.setProperty("off", not on)
         btn.style().unpolish(btn)
@@ -111,7 +114,10 @@ class Overlay(QWidget):
                 self.history.append((c["src"], text))
                 c.update(src="", partial="", dst="")
         else:
-            if kind == "src":
+            if kind == "partial_src":
+                if text:
+                    self.me.update(src=text, dst="…")
+            elif kind == "src":
                 self.me.update(src=text, dst="…")
             elif kind in ("partial_dst", "dst"):
                 self.me["dst"] = text
@@ -140,7 +146,7 @@ class Overlay(QWidget):
             self.captions.setText("".join(parts) or
                                   "<span style='color:#666'>aguardando fala em inglês…</span>")
         if self.me["src"]:
-            self.mine.setText(f"<span style='color:#7fd18b; font-size:13px'>Você: "
+            self.mine.setText(f"<span style='color:#7fd18b; font-size:{max(int(self.font_size * 0.7), 13)}px'>Você: "
                               f"{html.escape(self.me['src'])} → <b>{html.escape(self.me['dst'])}</b>"
                               f"</span>")
 

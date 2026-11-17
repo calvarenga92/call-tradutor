@@ -44,6 +44,13 @@ def get_mic(name: str = ""):
     return mic, mic.name
 
 
+def get_output(name: str = ""):
+    speaker = _match(sc.all_speakers(), name) if name else sc.default_speaker()
+    if speaker is None:
+        raise RuntimeError(f"Saída de áudio não encontrada: {name!r}")
+    return speaker
+
+
 def get_cable(name: str):
     return _match(sc.all_speakers(), name) if name else None
 
@@ -63,12 +70,16 @@ def blocks(device, stop: threading.Event):
                 buf = buf[BLOCK:]
 
 
-class CablePlayer:
-    """Toca áudio no cabo virtual numa thread própria (fila), sem bloquear o pipeline."""
+class Player:
+    """Toca áudio num dispositivo numa thread própria (fila), sem bloquear o pipeline.
 
-    def __init__(self, speaker, samplerate: int):
+    `playing` fica setado enquanto toca (+ `tail_s`), para quem precisa ignorar esse áudio.
+    """
+
+    def __init__(self, speaker, samplerate: int, tail_s: float = 0.4):
         self.speaker = speaker
         self.samplerate = samplerate
+        self.tail_s = tail_s
         self._queue: list[np.ndarray] = []
         self._cv = threading.Condition()
         self.playing = threading.Event()
@@ -77,6 +88,7 @@ class CablePlayer:
     def play(self, samples: np.ndarray) -> None:
         with self._cv:
             self._queue.append(samples.astype(np.float32))
+            self.playing.set()
             self._cv.notify()
 
     def _run(self) -> None:
@@ -88,6 +100,9 @@ class CablePlayer:
                         self._cv.wait()
                     samples = self._queue.pop(0)
                 self.playing.set()
-                player.play(samples)
-                if not self._queue:
-                    self.playing.clear()
+                # o "rabo" de silêncio cobre o atraso entre tocar e o loopback captar
+                player.play(np.concatenate([samples, np.zeros(int(self.samplerate * self.tail_s),
+                                                              dtype=np.float32)]))
+                with self._cv:
+                    if not self._queue:
+                        self.playing.clear()

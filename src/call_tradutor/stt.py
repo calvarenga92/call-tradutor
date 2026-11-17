@@ -38,6 +38,6 @@ class STT:
         finally:
             self.lock.release()
         text = " ".join(p for p in parts if p).strip()
-        if text.lower() in HALLUCINATIONS:
+        if text.lower() in HALLUCINATIONS or not any(ch.isalnum() for ch in text):
             return ""
         return text

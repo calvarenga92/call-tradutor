@@ -17,7 +17,8 @@ from .ui import LISTEN, SPEAK, Bridge, Overlay  # noqa: E402
 log = logging.getLogger("main")
 
 
-def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict) -> None:
+def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
+         dub_on: threading.Event) -> None:
     """Carrega modelos e sobe as pipelines fora da thread da UI."""
     try:
         from .pipeline import Pipeline
@@ -41,33 +42,52 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict) -> Non
 
         seg_args = dict(threshold=v["threshold"], silence_ms=v["silence_ms"],
                         min_speech_ms=v["min_speech_ms"], max_utterance_s=v["max_utterance_s"])
+        partial = 1.0 if ui["partials"] else None
+        d = cfg["dub"]
+        cable = None if only_captions else audio.get_cable(a["cable_device"])
 
+        tts = None
+        if d["enabled"] or cable is not None:
+            from .tts import TTS
+
+            bridge.status.emit("carregando voz (Kokoro)…", False)
+            tts = TTS(**cfg["tts"])
+            tts.speak("Ready.")  # aquece
+
+        # --- ouvir: o que toca no fone (inglês) → legenda PT (+ dublagem PT no fone) -------
         loop_dev, loop_name = audio.get_loopback(a["loopback_device"])
+        dub_player = None
+        if tts is not None and d["enabled"]:
+            dub_player = audio.Player(audio.get_output(d["device"] or a["loopback_device"]),
+                                      tts.samplerate)
+
+        def dub(text: str) -> None:
+            if dub_player and dub_on.is_set():
+                for c in tts.speak_chunks(text, voice=d["voice"], lang="pt-br", speed=d["speed"]):
+                    dub_player.play(c)
+
         pipelines[LISTEN] = Pipeline(
-            LISTEN, loop_dev, "en", stt, listen_tr,
-            Segmenter(**seg_args, partial_every_s=1.0 if ui["partials"] else None), on_event)
+            LISTEN, loop_dev, "en", stt, listen_tr, Segmenter(**seg_args, partial_every_s=partial),
+            on_event, output=dub, mute_when=dub_player.playing if dub_player else None)
         pipelines[LISTEN].start()
-        status = f"ouvindo: {loop_name}"
+        status = f"ouvindo: {loop_name}" + ("  ·  dublagem PT" if dub_player else "")
 
+        # --- falar: seu microfone (português) → texto EN na tela (+ voz EN no VB-Cable) -----
         if not only_captions:
-            cable = audio.get_cable(a["cable_device"])
-            if cable is None:
-                status += "  ·  sem VB-Cable: só legenda"
-            else:
-                from .tts import TTS
+            mic_dev, mic_name = audio.get_mic(a["mic_device"])
+            cable_player = audio.Player(cable, tts.samplerate, tail_s=0) if cable else None
 
-                bridge.status.emit("carregando voz (Kokoro)…", False)
-                tts = TTS(**cfg["tts"])
-                tts.speak("Ready.")  # aquece
-                player = audio.CablePlayer(cable, tts.samplerate)
-                mic_dev, mic_name = audio.get_mic(a["mic_device"])
-                speak_tr = Translator(t["ollama_url"], t["model"], "pt", "en", t["context_turns"])
-                pipelines[SPEAK] = Pipeline(
-                    SPEAK, mic_dev, "pt", stt, speak_tr,
-                    Segmenter(**seg_args, partial_every_s=None), on_event,
-                    output=lambda text: [player.play(c) for c in tts.speak_chunks(text)])
-                pipelines[SPEAK].start()
-                status += f"  ·  mic: {mic_name} → {cable.name}"
+            def to_cable(text: str) -> None:
+                if cable_player:
+                    for c in tts.speak_chunks(text):
+                        cable_player.play(c)
+
+            speak_tr = Translator(t["ollama_url"], t["model"], "pt", "en", t["context_turns"])
+            pipelines[SPEAK] = Pipeline(
+                SPEAK, mic_dev, "pt", stt, speak_tr, Segmenter(**seg_args, partial_every_s=partial),
+                on_event, output=to_cable)
+            pipelines[SPEAK].start()
+            status += f"  ·  mic: {mic_name}" + (" → VB-Cable" if cable else " (sem VB-Cable: só texto)")
 
         bridge.status.emit(status, False)
     except Exception as e:  # noqa: BLE001
@@ -84,6 +104,7 @@ def start_hotkeys(cfg: dict, bridge: Bridge) -> None:
     keyboard.GlobalHotKeys({
         hk["toggle_mic"]: lambda: bridge.toggle.emit("mic"),
         hk["toggle_captions"]: lambda: bridge.toggle.emit("captions"),
+        hk["toggle_dub"]: lambda: bridge.toggle.emit("dub"),
     }).start()
 
 
@@ -102,12 +123,20 @@ def main() -> None:
     bridge = Bridge()
     win = Overlay(bridge, cfg["ui"]["font_size"], cfg["ui"]["opacity"], cfg["ui"]["history"])
     pipelines: dict = {}
+    dub_on = threading.Event()
+    dub_on.set()
 
     def on_toggle(which: str) -> None:
         if which == "mic":
             p = pipelines.get(SPEAK)
             if p:
                 win.set_toggle("mic", p.toggle())
+        elif which == "dub":
+            if dub_on.is_set():
+                dub_on.clear()
+            else:
+                dub_on.set()
+            win.set_toggle("dub", dub_on.is_set())
         else:
             win.set_toggle("captions", not win.captions_on)
 
@@ -116,7 +145,7 @@ def main() -> None:
         win.btn_mic.hide()
     win.show()
 
-    threading.Thread(target=boot, args=(cfg, bridge, args.so_legenda, pipelines),
+    threading.Thread(target=boot, args=(cfg, bridge, args.so_legenda, pipelines, dub_on),
                      daemon=True).start()
     start_hotkeys(cfg, bridge)
     sys.exit(app.exec())

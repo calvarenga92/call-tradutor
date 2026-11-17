@@ -26,6 +26,14 @@ speed = 1.0
 model_path = "models/kokoro-v1.0.onnx"
 voices_path = "models/voices-v1.0.bin"
 
+[dub]
+# Dublagem: o que a pessoa fala em inglês sai também em áudio, em português, no seu fone.
+# Enquanto a dublagem toca, a captura da call pausa (senão o programa ouviria a si mesmo).
+enabled = true
+voice = "pm_alex"             # vozes PT do Kokoro: pm_alex, pm_santa, pf_dora
+speed = 1.15
+device = ""                   # vazio = o mesmo fone do loopback_device
+
 [vad]
 threshold = 0.5               # 0–1, maior = exige fala mais clara
 silence_ms = 600              # silêncio que fecha uma frase
@@ -41,3 +49,4 @@ partials = true               # mostra o inglês parcial enquanto a pessoa fala
 [hotkeys]
 toggle_mic = "<ctrl>+<alt>+m"      # liga/desliga a tradução da sua fala
 toggle_captions = "<ctrl>+<alt>+l" # liga/desliga a legenda
+toggle_dub = "<ctrl>+<alt>+d"      # liga/desliga a dublagem em português no fone

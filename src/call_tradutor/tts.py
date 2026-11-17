@@ -1,6 +1,7 @@
 """Voz em inglês com Kokoro (ONNX). Usa a GPU se o onnxruntime-gpu estiver instalado."""
 import logging
 import re
+import threading
 from typing import Iterator
 
 import numpy as np
@@ -35,13 +36,17 @@ class TTS:
         self.voice = voice
         self.speed = speed
         self.samplerate = 24000
+        self._lock = threading.Lock()  # o phonemizer (espeak) não é thread-safe
 
-    def speak(self, text: str) -> np.ndarray:
-        samples, sr = self.kokoro.create(text, voice=self.voice, speed=self.speed, lang="en-us")
+    def speak(self, text: str, voice: str | None = None, lang: str = "en-us",
+              speed: float | None = None) -> np.ndarray:
+        with self._lock:
+            samples, sr = self.kokoro.create(text, voice=voice or self.voice,
+                                             speed=speed or self.speed, lang=lang)
         self.samplerate = sr
         return samples
 
-    def speak_chunks(self, text: str) -> Iterator[np.ndarray]:
+    def speak_chunks(self, text: str, **kw) -> Iterator[np.ndarray]:
         """Gera o áudio frase a frase, para começar a tocar antes de terminar tudo."""
         for part in split_text(text):
-            yield self.speak(part)
+            yield self.speak(part, **kw)

@@ -21,7 +21,8 @@ EventFn = Callable[[str, str, str], None]
 class Pipeline:
     def __init__(self, name: str, device, src: str, stt: STT, translator: Translator,
                  segmenter: Segmenter, on_event: EventFn,
-                 output: Callable[[str], None] | None = None):
+                 output: Callable[[str], None] | None = None,
+                 mute_when: threading.Event | None = None):
         self.name = name
         self.device = device
         self.src = src
@@ -30,6 +31,7 @@ class Pipeline:
         self.segmenter = segmenter
         self.on_event = on_event
         self.output = output
+        self.mute_when = mute_when  # ex.: dublagem tocando no fone → não captar o próprio áudio
         self.enabled = threading.Event()
         self.enabled.set()
         self.stop = threading.Event()
@@ -53,7 +55,7 @@ class Pipeline:
         try:
             was_enabled = True
             for block in blocks(self.device, self.stop):
-                if not self.enabled.is_set():
+                if not self.enabled.is_set() or (self.mute_when and self.mute_when.is_set()):
                     if was_enabled:
                         self.segmenter.reset()
                         was_enabled = False

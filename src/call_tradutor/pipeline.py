@@ -19,7 +19,7 @@ EventFn = Callable[[str, str, str], None]
 
 
 class Pipeline:
-    def __init__(self, name: str, device, src: str, stt: STT, translator: Translator,
+    def __init__(self, name: str, device, src: str | None, stt: STT, translator: Translator,
                  segmenter: Segmenter, on_event: EventFn,
                  output: Callable[[str], None] | None = None,
                  mute_when: threading.Event | None = None):
@@ -92,18 +92,23 @@ class Pipeline:
             audio, self._partial = self._partial, None
         if audio is None:
             return
-        text = self.stt.transcribe(audio, self.src, blocking=False)
-        if text and self.finals.empty():
-            self.on_event(self.name, "partial_src", text)
+        res = self.stt.transcribe(audio, self.src, blocking=False)
+        if res and res[0] and self.finals.empty():
+            self.on_event(self.name, "partial_src", res[0])
 
     def _do_final(self, audio: np.ndarray) -> None:
         t0 = time.perf_counter()
-        text = self.stt.transcribe(audio, self.src)
+        text, lang = self.stt.transcribe(audio, self.src)
         t1 = time.perf_counter()
         if not text:
             self.on_event(self.name, "partial_src", "")
             return
         self.on_event(self.name, "src", text)
+        if lang == self.translator.dst:
+            # já está no idioma de destino (ex.: a pessoa falou português): só mostra
+            self.on_event(self.name, "dst", text)
+            log.info("%s [%s] sem tradução | %s", self.name, lang, text)
+            return
         translated = self.translator.translate(
             text, on_partial=lambda t: self.on_event(self.name, "partial_dst", t)
         )
@@ -112,6 +117,6 @@ class Pipeline:
         if self.output and translated:
             self.output(translated)
         t3 = time.perf_counter()
-        log.info("%s audio=%.1fs stt=%dms tr=%dms out=%dms | %s → %s", self.name,
+        log.info("%s [%s] audio=%.1fs stt=%dms tr=%dms out=%dms | %s → %s", self.name, lang,
                  len(audio) / 16000, (t1 - t0) * 1000, (t2 - t1) * 1000, (t3 - t2) * 1000,
                  text, translated)

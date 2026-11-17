@@ -34,7 +34,7 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
 
         t = cfg["translate"]
         bridge.status.emit(f"carregando {t['model']} no Ollama…", False)
-        listen_tr = Translator(t["ollama_url"], t["model"], "en", "pt", t["context_turns"])
+        listen_tr = Translator(t["ollama_url"], t["model"], "auto", "pt", t["context_turns"])
         try:
             listen_tr.warmup()
         except Exception as e:  # noqa: BLE001
@@ -54,7 +54,7 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
             tts = TTS(**cfg["tts"])
             tts.speak("Ready.")  # aquece
 
-        # --- ouvir: o que toca no fone (inglês) → legenda PT (+ dublagem PT no fone) -------
+        # --- ouvir: o que toca no fone (qualquer idioma) → legenda PT (+ dublagem PT no fone) -------
         loop_dev, loop_name = audio.get_loopback(a["loopback_device"])
         dub_player = None
         if tts is not None and d["enabled"]:
@@ -67,7 +67,7 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
                     dub_player.play(c)
 
         pipelines[LISTEN] = Pipeline(
-            LISTEN, loop_dev, "en", stt, listen_tr, Segmenter(**seg_args, partial_every_s=partial),
+            LISTEN, loop_dev, None, stt, listen_tr, Segmenter(**seg_args, partial_every_s=partial),
             on_event, output=dub, mute_when=dub_player.playing if dub_player else None)
         pipelines[LISTEN].start()
         status = f"ouvindo: {loop_name}" + ("  ·  dublagem PT" if dub_player else "")

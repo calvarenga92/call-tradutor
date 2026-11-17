@@ -2,11 +2,11 @@
 
 Tradução de call em tempo real, 100% local e gratuita. Funciona com qualquer app de chamada (Meet, Zoom, Teams, Discord, WhatsApp desktop…), porque trabalha no nível do áudio do sistema:
 
-- **Ouvir:** o que a outra pessoa fala em inglês vira legenda em português numa janela sempre no topo.
+- **Ouvir:** o que a outra pessoa fala, em qualquer idioma (detectado automaticamente), vira legenda em português numa janela sempre no topo e, opcionalmente, dublagem em português no seu fone.
 - **Falar:** você fala português e a outra pessoa ouve uma voz em inglês, entregue por um microfone virtual.
 
 ```
-saída de áudio (loopback) ─► VAD ─► Whisper (en) ─► LLM local ─► legenda PT
+saída de áudio (loopback) ─► VAD ─► Whisper (auto) ─► LLM local ─► legenda PT (+ voz PT no fone)
 seu microfone             ─► VAD ─► Whisper (pt) ─► LLM local ─► Kokoro (voz EN) ─► CABLE Input ─► app da call
 ```
 

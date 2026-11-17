@@ -144,7 +144,7 @@ class Overlay(QWidget):
                 parts.append(f"<i style='color:#9a9a9a; font-size:{small}px'>"
                              f"{html.escape(c['partial'])}</i>")
             self.captions.setText("".join(parts) or
-                                  "<span style='color:#666'>aguardando fala em inglês…</span>")
+                                  "<span style='color:#666'>aguardando fala…</span>")
         if self.me["src"]:
             self.mine.setText(f"<span style='color:#7fd18b; font-size:{max(int(self.font_size * 0.7), 13)}px'>Você: "
                               f"{html.escape(self.me['src'])} → <b>{html.escape(self.me['dst'])}</b>"

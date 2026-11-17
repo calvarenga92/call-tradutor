@@ -17,12 +17,16 @@ class STT:
         self.model = WhisperModel(model, device=device, compute_type=compute_type)
         self.lock = threading.Lock()
 
-    def transcribe(self, audio: np.ndarray, lang: str, blocking: bool = True) -> str | None:
-        """Retorna o texto, ou None se `blocking=False` e a GPU estiver ocupada."""
+    def transcribe(self, audio: np.ndarray, lang: str | None,
+                   blocking: bool = True) -> tuple[str, str] | None:
+        """Retorna (texto, idioma). `lang=None` detecta o idioma.
+
+        Retorna None se `blocking=False` e a GPU estiver ocupada.
+        """
         if not self.lock.acquire(blocking=blocking):
             return None
         try:
-            segments, _ = self.model.transcribe(
+            segments, info = self.model.transcribe(
                 audio,
                 language=lang,
                 beam_size=1,
@@ -39,5 +43,5 @@ class STT:
             self.lock.release()
         text = " ".join(p for p in parts if p).strip()
         if text.lower() in HALLUCINATIONS or not any(ch.isalnum() for ch in text):
-            return ""
-        return text
+            text = ""
+        return text, info.language

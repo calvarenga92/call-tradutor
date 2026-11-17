@@ -5,7 +5,7 @@ from typing import Callable
 
 import httpx
 
-LANG_NAMES = {"en": "English", "pt": "Brazilian Portuguese"}
+LANG_NAMES = {"en": "English", "pt": "Brazilian Portuguese", "auto": "whatever language it is in"}
 
 SYSTEM = (
     "You are a live interpreter in a voice call. Translate each message from {src} to {dst}. "
@@ -21,6 +21,7 @@ class Translator:
     def __init__(self, url: str, model: str, src: str, dst: str, context_turns: int = 3):
         self.url = url.rstrip("/") + "/api/chat"
         self.model = model
+        self.dst = dst
         self.system = SYSTEM.format(src=LANG_NAMES[src], dst=LANG_NAMES[dst])
         self.history: deque[tuple[str, str]] = deque(maxlen=context_turns)
         self.client = httpx.Client(timeout=httpx.Timeout(30.0, connect=3.0))

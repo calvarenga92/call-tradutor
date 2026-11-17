@@ -37,16 +37,17 @@ device = ""                   # vazio = o mesmo fone do loopback_device
 
 [vad]
 threshold = 0.5               # 0–1, maior = exige fala mais clara
-silence_ms = 400              # silêncio que fecha uma frase
+silence_ms = 300              # silêncio que fecha uma frase
 min_speech_ms = 250           # ignora ruídos mais curtos que isso
-soft_max_s = 3.0              # depois disso, qualquer respiração já fecha o trecho
-max_utterance_s = 5.0         # corte forçado para quem fala sem parar
+soft_max_s = 2.0              # depois disso, qualquer respiração já fecha o trecho
+max_utterance_s = 3.5         # corte forçado para quem fala sem parar
 
 [ui]
 font_size = 22
 opacity = 0.88
 history = 3                   # quantas legendas ficam na tela
-partials = true               # tradução provisória (cinza) enquanto a pessoa fala
+partials = true               # prévia já traduzida (cinza) enquanto a pessoa fala
+partial_every_s = 0.6         # de quanto em quanto tempo a prévia atualiza
 
 [hotkeys]
 toggle_mic = "<ctrl>+<alt>+m"      # liga/desliga a tradução da sua fala

@@ -31,19 +31,25 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
 
         bridge.status.emit("carregando Whisper na GPU…", False)
         stt = STT(**cfg["stt"])
+        # aquece a GPU nos dois modos (com e sem idioma), senão a 1ª fala trava alguns segundos
+        import numpy as np
+        noise = (np.random.randn(16000 * 3) * 0.01).astype(np.float32)
+        for lang in (None, "en", "pt"):
+            stt.transcribe(noise, lang)
 
         t = cfg["translate"]
         bridge.status.emit(f"carregando {t['model']} no Ollama…", False)
         listen_tr = Translator(t["ollama_url"], t["model"], "auto", "pt", t["context_turns"])
         try:
             listen_tr.warmup()
+            listen_tr.translate("Hello, can you hear me?", remember=False)
         except Exception as e:  # noqa: BLE001
             raise RuntimeError(f"Ollama não respondeu em {t['ollama_url']} — ele está aberto? ({e})")
 
         seg_args = dict(threshold=v["threshold"], silence_ms=v["silence_ms"],
                         min_speech_ms=v["min_speech_ms"], soft_max_s=v["soft_max_s"],
                         max_utterance_s=v["max_utterance_s"])
-        partial = 1.5 if ui["partials"] else None
+        partial = ui.get("partial_every_s", 0.6) if ui["partials"] else None
         d = cfg["dub"]
         cable = None if only_captions else audio.get_cable(a["cable_device"])
 

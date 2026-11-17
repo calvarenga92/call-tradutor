@@ -39,6 +39,24 @@ class Pipeline:
         self.finals: queue.Queue[np.ndarray] = queue.Queue()
         self._partial: np.ndarray | None = None
         self._partial_lock = threading.Lock()
+        # idioma detectado fica "travado" por alguns trechos: detectar custa ~250 ms cada vez
+        self._lang: str | None = None
+        self._lang_left = 0
+
+    LANG_REUSE = 6  # trechos com o idioma travado antes de detectar de novo
+
+    def _lang_hint(self) -> str | None:
+        if self.src is not None:
+            return self.src
+        return self._lang if self._lang_left > 0 else None
+
+    def _learn_lang(self, lang: str, detected: bool) -> None:
+        if self.src is not None:
+            return
+        if detected:
+            self._lang, self._lang_left = lang, self.LANG_REUSE
+        else:
+            self._lang_left -= 1
 
     def start(self) -> None:
         threading.Thread(target=self._capture, name=f"{self.name}-cap", daemon=True).start()
@@ -93,7 +111,7 @@ class Pipeline:
             audio, self._partial = self._partial, None
         if audio is None:
             return
-        res = self.stt.transcribe(audio, self.src, blocking=False)
+        res = self.stt.transcribe(audio, self._lang_hint(), blocking=False)
         if not res or not res[0] or not self.finals.empty():
             return
         text, lang = res
@@ -107,8 +125,11 @@ class Pipeline:
 
     def _do_final(self, audio: np.ndarray) -> None:
         t0 = time.perf_counter()
-        text, lang = self.stt.transcribe(audio, self.src)
+        hint = self._lang_hint()
+        text, lang = self.stt.transcribe(audio, hint)
         t1 = time.perf_counter()
+        if text:
+            self._learn_lang(lang, detected=hint is None)
         if not text:
             self.on_event(self.name, "partial_src", "")
             return

@@ -13,8 +13,11 @@ device = "cuda"
 compute_type = "float16"
 
 [translate]
-ollama_url = "http://127.0.0.1:11434"
-model = "qwen2.5:7b"
+ollama_url = "http://127.0.0.1:11434"  # 127.0.0.1, não "localhost": no Windows o localhost soma ~2 s
+# qwen3:8b   → padrão: boa tradução, ~0,4 s, ~6 GB de VRAM
+# gemma3:12b → tradução mais natural, ~0,8 s, mas ocupa quase toda a GPU de 12 GB junto com o Whisper
+# qwen2.5:7b → mais leve, traduz expressões ao pé da letra
+model = "qwen3:8b"
 context_turns = 3             # quantas falas anteriores entram como contexto
 
 [tts]

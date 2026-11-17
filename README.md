@@ -26,7 +26,7 @@ Latência medida numa RTX 3060 12 GB: legenda ~1,3 s após o fim da frase; voz ~
 1. Python 3.11+ e [Ollama](https://ollama.com):
    ```
    winget install Ollama.Ollama
-   ollama pull qwen2.5:7b
+   ollama pull qwen3:8b
    ```
 2. Dependências:
    ```

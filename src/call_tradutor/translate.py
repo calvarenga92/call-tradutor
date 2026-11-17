@@ -38,18 +38,18 @@ class Translator:
             messages += [{"role": "user", "content": src}, {"role": "assistant", "content": dst}]
         messages.append({"role": "user", "content": text})
 
+        body = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+            "keep_alive": "60m",
+            "options": {"temperature": 0.2},
+        }
+        if self.model.startswith(("qwen3", "deepseek-r1")):
+            body["think"] = False  # modelos com raciocínio: desliga, senão atrasa segundos
+
         out = ""
-        with self.client.stream(
-            "POST",
-            self.url,
-            json={
-                "model": self.model,
-                "messages": messages,
-                "stream": True,
-                "keep_alive": "60m",
-                "options": {"temperature": 0.2},
-            },
-        ) as resp:
+        with self.client.stream("POST", self.url, json=body) as resp:
             resp.raise_for_status()
             for line in resp.iter_lines():
                 if not line:

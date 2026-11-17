@@ -41,6 +41,8 @@ class Pipeline:
         self._partial_lock = threading.Lock()
         # idioma detectado fica "travado" por alguns trechos: detectar custa ~250 ms cada vez
         self._prev_text = ""     # fim do trecho anterior, contexto para o Whisper
+        self._epoch = 0          # muda no "Limpar": resultados de antes são descartados
+        self._reset_segmenter = False
         self._lang: str | None = None
         self._lang_left = 0
 
@@ -63,6 +65,24 @@ class Pipeline:
         threading.Thread(target=self._capture, name=f"{self.name}-cap", daemon=True).start()
         threading.Thread(target=self._work, name=f"{self.name}-work", daemon=True).start()
 
+    def clear(self) -> None:
+        """Botão Limpar: descarta o que está na fila/em andamento e zera o contexto."""
+        self._epoch += 1
+        with self._partial_lock:
+            self._partial = None
+        while not self.finals.empty():
+            try:
+                self.finals.get_nowait()
+            except queue.Empty:
+                break
+        self._prev_text = ""
+        self.translator.history.clear()
+        self._reset_segmenter = True  # a thread de captura reseta (o VAD é dela)
+
+    def _emit(self, ep: int, kind: str, text: str) -> None:
+        if ep == self._epoch:
+            self.on_event(self.name, kind, text)
+
     def toggle(self) -> bool:
         if self.enabled.is_set():
             self.enabled.clear()
@@ -81,6 +101,10 @@ class Pipeline:
                         was_enabled = False
                     continue
                 was_enabled = True
+                if self._reset_segmenter:
+                    self._reset_segmenter = False
+                    self.segmenter.reset()
+                    continue
                 for kind, audio in self.segmenter.feed(block):
                     if kind == "final":
                         with self._partial_lock:
@@ -108,6 +132,7 @@ class Pipeline:
                 self.on_event(self.name, "error", str(e))
 
     def _do_partial(self) -> None:
+        ep = self._epoch
         with self._partial_lock:
             audio, self._partial = self._partial, None
         if audio is None or len(audio) < 16000:
@@ -117,37 +142,38 @@ class Pipeline:
         if not res or len(res[0].split()) < 2 or not self.finals.empty():
             return
         text, lang = res
-        self.on_event(self.name, "partial_src", text)
+        self._emit(ep, "partial_src", text)
         if self.translate_partials:
             # prévia já traduzida; se chegar um trecho final no meio, ele tem prioridade
             preview = text if lang == self.translator.dst else \
                 self.translator.translate(text, remember=False)
             if preview and self.finals.empty():
-                self.on_event(self.name, "partial_dst", preview)
+                self._emit(ep, "partial_dst", preview)
 
     def _do_final(self, audio: np.ndarray) -> None:
+        ep = self._epoch
         t0 = time.perf_counter()
         hint = self._lang_hint()
         text, lang = self.stt.transcribe(audio, hint, prompt=self._prev_text)
         t1 = time.perf_counter()
-        if text:
+        if text and ep == self._epoch:
             self._learn_lang(lang, detected=hint is None)
             self._prev_text = text[-200:]
         if not text:
-            self.on_event(self.name, "partial_src", "")
+            self._emit(ep, "partial_src", "")
             return
-        self.on_event(self.name, "src", text)
+        self._emit(ep, "src", text)
         if lang == self.translator.dst:
             # já está no idioma de destino (ex.: a pessoa falou português): só mostra
-            self.on_event(self.name, "dst", text)
+            self._emit(ep, "dst", text)
             log.info("%s [%s] sem tradução | %s", self.name, lang, text)
             return
         translated = self.translator.translate(
-            text, on_partial=lambda t: self.on_event(self.name, "partial_dst", t)
+            text, on_partial=lambda t: self._emit(ep, "partial_dst", t)
         )
         t2 = time.perf_counter()
-        self.on_event(self.name, "dst", translated)
-        if self.output and translated:
+        self._emit(ep, "dst", translated)
+        if self.output and translated and ep == self._epoch:
             self.output(translated)
         t3 = time.perf_counter()
         log.info("%s [%s] audio=%.1fs stt=%dms tr=%dms out=%dms | %s → %s", self.name, lang,

@@ -52,6 +52,12 @@ class Coach:
         self._generation = 0       # muda a cada atividade: cancela a sugestão em andamento
         threading.Thread(target=self._loop, name="coach", daemon=True).start()
 
+    def clear(self) -> None:
+        with self._lock:
+            self.convo.clear()
+            self._pending = False
+            self._generation += 1  # cancela a sugestão em andamento
+
     # chamado pelas pipelines (mesmo formato do on_event da UI)
     def feed(self, pipeline: str, kind: str, text: str) -> None:
         with self._lock:
@@ -108,7 +114,7 @@ class Coach:
                 if self._generation != gen:
                     # a pessoa voltou a falar: descarta, gera de novo quando ela parar
                     with self._lock:
-                        self._pending = True
+                        self._pending = bool(self.convo)  # após "Limpar" a conversa está vazia
                     return
                 if not line:
                     continue

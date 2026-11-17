@@ -128,6 +128,7 @@ def start_hotkeys(cfg: dict, bridge: Bridge) -> None:
         hk["toggle_captions"]: lambda: bridge.toggle.emit("captions"),
         hk["toggle_dub"]: lambda: bridge.toggle.emit("dub"),
         hk["toggle_coach"]: lambda: bridge.toggle.emit("coach"),
+        hk.get("clear", "<ctrl>+<alt>+c"): lambda: bridge.toggle.emit("clear"),
     }).start()
 
 
@@ -155,6 +156,10 @@ def main() -> None:
             p = pipelines.get(SPEAK)
             if p:
                 win.set_toggle("mic", p.toggle())
+        elif which == "clear":
+            for key, obj in pipelines.items():
+                obj.clear()
+            win.clear()
         elif which == "coach":
             coach = pipelines.get("coach")
             if coach:

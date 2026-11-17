@@ -14,7 +14,7 @@ class Bridge(QObject):
     """Ponte thread-safe: as threads de áudio emitem, a UI recebe na thread do Qt."""
     event = Signal(str, str, str)    # pipeline, tipo, texto
     status = Signal(str, bool)       # mensagem, é erro?
-    toggle = Signal(str)             # "mic" | "captions" | "dub" | "coach"
+    toggle = Signal(str)             # "mic" | "captions" | "dub" | "coach" | "clear"
 
 
 BTN_STYLE = """
@@ -52,6 +52,9 @@ class Overlay(QWidget):
         self.btn_dub.clicked.connect(lambda: bridge.toggle.emit("dub"))
         self.btn_coach = QPushButton("💡 Resposta: ON")
         self.btn_coach.clicked.connect(lambda: bridge.toggle.emit("coach"))
+        btn_clear = QPushButton("🧹 Limpar")
+        btn_clear.setToolTip("Apaga a tela e o contexto da conversa (Ctrl+Alt+C)")
+        btn_clear.clicked.connect(lambda: bridge.toggle.emit("clear"))
         btn_close = QPushButton("✕")
         self.btn_mic.clicked.connect(lambda: bridge.toggle.emit("mic"))
         self.btn_cap.clicked.connect(lambda: bridge.toggle.emit("captions"))
@@ -63,6 +66,7 @@ class Overlay(QWidget):
         top.addWidget(self.btn_cap)
         top.addWidget(self.btn_dub)
         top.addWidget(self.btn_coach)
+        top.addWidget(btn_clear)
         top.addWidget(btn_close)
 
         self.captions = QLabel()
@@ -115,6 +119,15 @@ class Overlay(QWidget):
         if which == "captions":
             self.captions_on = on
             self.render()
+
+    def clear(self) -> None:
+        self.lines.clear()
+        self.preview = ""
+        self.me = ""
+        self.mine.setText("")
+        self.reply.setText("")
+        self.reply.hide()
+        self.render()
 
     def on_event(self, pipeline: str, kind: str, text: str) -> None:
         if kind == "error":

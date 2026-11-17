@@ -64,3 +64,4 @@ toggle_mic = "<ctrl>+<alt>+m"      # liga/desliga a tradução da sua fala
 toggle_captions = "<ctrl>+<alt>+l" # liga/desliga a legenda
 toggle_dub = "<ctrl>+<alt>+d"      # liga/desliga a dublagem em português no fone
 toggle_coach = "<ctrl>+<alt>+r"    # liga/desliga a sugestão de resposta
+clear = "<ctrl>+<alt>+c"           # limpa a tela e o contexto da conversa

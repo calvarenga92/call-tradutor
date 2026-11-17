@@ -58,6 +58,7 @@ No app da call:
 Atalhos globais:
 - `Ctrl+Alt+M`: liga/desliga a tradução da sua fala.
 - `Ctrl+Alt+L`: liga/desliga a legenda.
+- `Ctrl+Alt+C` ou o botão 🧹: limpa a tela e o contexto da conversa (quando algo foi capturado errado).
 
 A janela é arrastável e redimensionável pelo canto.
 

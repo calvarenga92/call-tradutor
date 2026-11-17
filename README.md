@@ -74,5 +74,5 @@ A janela é arrastável e redimensionável pelo canto.
 
 Quando a outra pessoa termina de falar (`turn_gap_s` de silêncio), aparece um bloco **💡 Diga:** com o que você pode responder, em inglês (para falar) e em português logo abaixo (para entender o que está dizendo). Ele usa a conversa até ali e o seu `perfil.md` (experiência, stack, casos para contar). O modelo só usa fatos do perfil e, se não souber, sugere uma resposta honesta.
 
-- `perfil.md` fica fora do git (tem dados pessoais). Edite à vontade: quanto mais casos concretos, melhores as sugestões.
+- `perfil.md` fica fora do git (tem dados pessoais). Para começar, copie `perfil.exemplo.md` para `perfil.md` e preencha: quanto mais casos concretos, melhores as sugestões.
 - `Ctrl+Alt+R` ou o botão 💡 liga e desliga.

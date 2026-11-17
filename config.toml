@@ -21,6 +21,7 @@ ollama_url = "http://127.0.0.1:11434"  # 127.0.0.1, não "localhost": no Windows
 # qwen2.5:7b → mais leve, traduz expressões ao pé da letra
 model = "qwen3:8b"
 context_turns = 3             # quantas falas anteriores entram como contexto
+keep_alive = "5m"             # modelo sai da memória após 5 min sem uso (e na hora ao fechar o app)
 
 [tts]
 voice = "am_michael"          # outras: am_adam, af_heart, af_bella, bm_george, bf_emma

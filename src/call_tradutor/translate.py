@@ -17,6 +17,19 @@ SYSTEM = (
 )
 
 
+# Quanto tempo o Ollama mantém o modelo na memória depois do último uso (config: translate.keep_alive).
+# Curto de propósito: fora da call o modelo sai da RAM/GPU sozinho.
+KEEP_ALIVE = "5m"
+
+
+def unload(url: str, model: str) -> None:
+    """Tira o modelo da memória na hora (ao fechar o app)."""
+    try:
+        httpx.post(url.rstrip("/") + "/api/generate", json={"model": model, "keep_alive": 0}, timeout=5.0)
+    except httpx.HTTPError:
+        pass
+
+
 class Translator:
     def __init__(self, url: str, model: str, src: str, dst: str, context_turns: int = 3):
         self.url = url.rstrip("/") + "/api/chat"
@@ -30,7 +43,7 @@ class Translator:
         """Carrega o modelo na GPU antes da primeira fala."""
         self.client.post(
             self.url.replace("/api/chat", "/api/generate"),
-            json={"model": self.model, "keep_alive": "60m"},
+            json={"model": self.model, "keep_alive": KEEP_ALIVE},
         )
 
     def translate(self, text: str, on_partial: Callable[[str], None] | None = None,
@@ -45,7 +58,7 @@ class Translator:
             "model": self.model,
             "messages": messages,
             "stream": True,
-            "keep_alive": "60m",
+            "keep_alive": KEEP_ALIVE,
             "options": {"temperature": 0.2},
         }
         if self.model.startswith(("qwen3", "deepseek-r1")):

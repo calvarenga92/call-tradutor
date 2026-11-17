@@ -143,7 +143,13 @@ def main() -> None:
         handlers=[logging.StreamHandler(), logging.FileHandler(ROOT / "call-tradutor.log", encoding="utf-8")])
     cfg = load_config(args.config and __import__("pathlib").Path(args.config))
 
+    from . import translate
+    t = cfg["translate"]
+    translate.KEEP_ALIVE = t.get("keep_alive", "5m")
+
     app = QApplication(sys.argv)
+    # ao fechar a janela, o modelo sai da memória na hora (não espera o keep_alive)
+    app.aboutToQuit.connect(lambda: translate.unload(t["ollama_url"], t["model"]))
     bridge = Bridge()
     win = Overlay(bridge, cfg["ui"]["font_size"], cfg["ui"]["opacity"], cfg["ui"]["history"])
     pipelines: dict = {}

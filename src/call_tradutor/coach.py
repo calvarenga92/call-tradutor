@@ -11,6 +11,7 @@ from typing import Callable
 
 import httpx
 
+from . import translate
 from .ui import LISTEN, SPEAK
 
 log = logging.getLogger("coach")
@@ -119,7 +120,7 @@ class Coach:
                                         f"What should {self.name} say next? Answer with the EN: line "
                                         "(in English) and the PT: line."},
         ]
-        body = {"model": self.model, "messages": messages, "stream": True, "keep_alive": "60m",
+        body = {"model": self.model, "messages": messages, "stream": True, "keep_alive": translate.KEEP_ALIVE,
                 "options": {"temperature": 0.4, "num_predict": 360}}
         if self.model.startswith(("qwen3", "deepseek-r1")):
             body["think"] = False

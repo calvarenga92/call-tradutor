@@ -61,12 +61,12 @@ max_utterance_s = 6.0         # corte forçado para quem fala sem parar
 soft_silence_ms = 100         # "respiração": pausa mínima para esse corte (entre palavras é menos)
 
 [vad_falar]
-# A sua fala: frases curtas saem inteiras; frase longa é cortada na primeira respiração depois
-# de ~2,5 s, para a voz em inglês começar enquanto você ainda fala (antes esperava a frase toda).
-silence_ms = 450              # pausa que fecha a frase
-soft_max_s = 2.5              # depois de 2,5 s, a próxima respiração já fecha o trecho
+# A sua fala, quase em tempo real: trechos curtos (~2 s) cortados nas respirações, para a voz em
+# inglês começar enquanto você ainda fala. A tradução recebe as falas anteriores como contexto.
+silence_ms = 300              # pausa que fecha a frase
+soft_max_s = 1.8              # depois de 1,8 s, a próxima respiração já fecha o trecho
 soft_silence_ms = 100         # "respiração": pausa mínima para esse corte
-max_utterance_s = 5.0         # corte forçado para quem fala sem respirar
+max_utterance_s = 3.5         # corte forçado (no ponto de fala mais fraca) para quem não respira
 
 [ui]
 font_size = 22

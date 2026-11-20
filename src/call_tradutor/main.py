@@ -105,10 +105,15 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
             except Exception:  # noqa: BLE001
                 log.exception("ducking indisponível")
 
+        dub_voice = None
+        if dub_player:
+            from .tts import SpeechQueue
+
+            dub_voice = SpeechQueue(tts, dub_player, voice=d["voice"], lang="pt-br", speed=d["speed"])
+
         def dub(text: str) -> None:
-            if dub_player and dub_on.is_set():
-                for c in tts.speak_chunks(text, voice=d["voice"], lang="pt-br", speed=d["speed"]):
-                    dub_player.play(c)
+            if dub_voice and dub_on.is_set():
+                dub_voice.say(text)
 
         pipelines[LISTEN] = Pipeline(
             LISTEN, loop_dev, cfg["stt"].get("listen_language") or None, stt, listen_tr,
@@ -123,10 +128,15 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
             mic_dev, mic_name = audio.get_mic(a["mic_device"])
             cable_player = audio.Player(cable, tts.samplerate, tail_s=0) if cable else None
 
+            cable_voice = None
+            if cable_player:
+                from .tts import SpeechQueue
+
+                cable_voice = SpeechQueue(tts, cable_player)
+
             def to_cable(text: str) -> None:
-                if cable_player:
-                    for c in tts.speak_chunks(text):
-                        cable_player.play(c)
+                if cable_voice:
+                    cable_voice.say(text)
 
             speak_tr = Translator(t["ollama_url"], t["model"], "pt", "en", t["context_turns"])
             # sua fala espera a frase terminar: a voz em inglês sai inteira, não em pedaços

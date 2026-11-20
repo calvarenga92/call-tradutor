@@ -42,13 +42,16 @@ class Segmenter:
     """Recebe blocos de 32 ms e devolve eventos ("partial" | "final", áudio)."""
 
     def __init__(self, threshold=0.5, silence_ms=400, min_speech_ms=250, soft_max_s=3.0,
-                 max_utterance_s=5.0, partial_every_s: float | None = 0.8, preroll_ms=300):
+                 max_utterance_s=5.0, partial_every_s: float | None = 0.8, preroll_ms=300,
+                 soft_silence_ms: float = 0):
         self.vad = StreamingVAD()
         self.on = threshold
         self.off = max(threshold - 0.15, 0.05)
         self.silence_blocks = _blocks(silence_ms)
         self.min_speech_blocks = _blocks(min_speech_ms)
         self.soft_blocks = _blocks(soft_max_s * 1000)
+        # depois de soft_max_s: 0 = qualquer queda fecha; >0 = exige essa pausa (uma respiração)
+        self.soft_silence_blocks = _blocks(soft_silence_ms) if soft_silence_ms else 0
         self.max_blocks = _blocks(max_utterance_s * 1000)
         self.cut_window = _blocks(1500)
         self.partial_blocks = _blocks(partial_every_s * 1000) if partial_every_s else 0
@@ -94,7 +97,9 @@ class Segmenter:
             self.silent += 1
 
         n = len(self.buf)
-        if self.silent >= self.silence_blocks or (n >= self.soft_blocks and p < self.on):
+        soft_cut = n >= self.soft_blocks and (
+            self.silent >= self.soft_silence_blocks if self.soft_silence_blocks else p < self.on)
+        if self.silent >= self.silence_blocks or soft_cut:
             if self.voiced >= self.min_speech_blocks:
                 keep = n - max(self.silent - 4, 0)  # tira o silêncio do fim, deixa ~130 ms
                 events.append(("final", np.concatenate(self.buf[:keep])))

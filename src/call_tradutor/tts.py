@@ -50,3 +50,30 @@ class TTS:
         """Gera o áudio frase a frase, para começar a tocar antes de terminar tudo."""
         for part in split_text(text):
             yield self.speak(part, **kw)
+
+
+class SpeechQueue:
+    """Fila de fala numa thread própria: quem traduz só entrega o texto e segue para o próximo
+    trecho, enquanto a voz deste é gerada e tocada (antes a transcrição do trecho seguinte
+    esperava a voz inteira ficar pronta)."""
+
+    def __init__(self, tts: "TTS", player, **speak_kw):
+        import queue
+
+        self.tts = tts
+        self.player = player
+        self.kw = speak_kw
+        self.q: "queue.Queue[str]" = queue.Queue()
+        threading.Thread(target=self._run, name="fala", daemon=True).start()
+
+    def say(self, text: str) -> None:
+        self.q.put(text)
+
+    def _run(self) -> None:
+        while True:
+            text = self.q.get()
+            try:
+                for chunk in self.tts.speak_chunks(text, **self.kw):
+                    self.player.play(chunk)
+            except Exception:  # noqa: BLE001
+                log.exception("fala")

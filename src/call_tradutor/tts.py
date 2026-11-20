@@ -40,8 +40,10 @@ class TTS:
 
     def speak(self, text: str, voice: str | None = None, lang: str = "en-us",
               speed: float | None = None) -> np.ndarray:
+        from .voices import resolve
+
         with self._lock:
-            samples, sr = self.kokoro.create(text, voice=voice or self.voice,
+            samples, sr = self.kokoro.create(text, voice=resolve(voice or self.voice),
                                              speed=speed or self.speed, lang=lang)
         self.samplerate = sr
         return samples
@@ -67,13 +69,17 @@ class SpeechQueue:
         threading.Thread(target=self._run, name="fala", daemon=True).start()
 
     def say(self, text: str) -> None:
-        self.q.put(text)
+        self.q.put((text, None))
+
+    def say_with(self, text: str, **kw) -> None:
+        """Uma frase com outros parâmetros (ex.: amostra de voz), sem mudar a fila."""
+        self.q.put((text, kw))
 
     def _run(self) -> None:
         while True:
-            text = self.q.get()
+            text, extra = self.q.get()
             try:
-                for chunk in self.tts.speak_chunks(text, **self.kw):
+                for chunk in self.tts.speak_chunks(text, **{**self.kw, **(extra or {})}):
                     self.player.play(chunk)
             except Exception:  # noqa: BLE001
                 log.exception("fala")

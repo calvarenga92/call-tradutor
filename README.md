@@ -63,6 +63,7 @@ Atalhos globais:
 - `Ctrl+Alt+L`: liga/desliga a legenda.
 - `Ctrl+Alt+C` ou o botão 🧹: limpa a tela e o contexto da conversa (quando algo foi capturado errado).
 
+- ⚙: escolhe a sua voz em inglês (a que a call ouve) e a voz da dublagem. Ao trocar, a próxima frase já sai com a voz nova e uma amostra toca só no seu fone. A escolha fica salva. Vozes personalizadas (vetores do Kokoro em `vozes/*.npy`) aparecem no topo da lista com ★.
 - `Ctrl+Alt+Q` ou o ✕: encerra o app inteiro (para a captura, tira o modelo do Ollama da memória e fecha o processo).
 
 A janela fica sempre no topo, aparece na barra de tarefas (o — minimiza), é arrastável e redimensionável pelo canto, e abre onde você deixou. As chaves ficam verdes quando ligadas; a bolinha ao lado do nome fica amarela carregando, verde pronta e vermelha com erro. Só abre uma cópia por vez.

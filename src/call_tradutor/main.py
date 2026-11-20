@@ -74,6 +74,7 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
 
             bridge.status.emit("carregando voz (Kokoro)…", False)
             tts = TTS(**cfg["tts"])
+            pipelines["_tts"] = tts
             tts.speak("Ready.")  # aquece
 
         # --- ouvir: o que toca no fone (qualquer idioma) → legenda PT (+ dublagem PT no fone) -------
@@ -109,7 +110,9 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
         if dub_player:
             from .tts import SpeechQueue
 
-            dub_voice = SpeechQueue(tts, dub_player, voice=d["voice"], lang="pt-br", speed=d["speed"])
+            dub_voice = SpeechQueue(tts, dub_player, voice=voice_choice("pt", d["voice"]),
+                                    lang="pt-br", speed=d["speed"])
+            pipelines["_dub_voice"] = dub_voice
 
         def dub(text: str) -> None:
             if dub_voice and dub_on.is_set():
@@ -132,7 +135,9 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
             if cable_player:
                 from .tts import SpeechQueue
 
-                cable_voice = SpeechQueue(tts, cable_player)
+                cable_voice = SpeechQueue(tts, cable_player,
+                                          voice=voice_choice("en", cfg["tts"]["voice"]))
+                pipelines["_cable_voice"] = cable_voice
 
             def to_cable(text: str) -> None:
                 if cable_voice:
@@ -147,11 +152,22 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
             pipelines[SPEAK].start()
             status += f"  ·  mic: {mic_name}" + (" → VB-Cable" if cable else " (sem VB-Cable: só texto)")
 
+        bridge.voices_ready.emit()
         log.info("pronto | %s", status)
         bridge.status.emit(status, False)
     except Exception as e:  # noqa: BLE001
         log.exception("boot")
         bridge.status.emit(str(e), True)
+
+
+def voice_choice(lang: str, default: str) -> str:
+    """Voz escolhida na interface (fica salva); se ela sumiu, volta para a do config.toml."""
+    from PySide6.QtCore import QSettings
+
+    from .voices import catalog
+
+    v = QSettings("call-tradutor", "vozes").value(lang, default)
+    return v if v in catalog(lang) else default
 
 
 def start_hotkeys(cfg: dict, bridge: Bridge) -> None:
@@ -220,8 +236,9 @@ def main() -> None:
             if p:
                 win.set_toggle("mic", p.toggle())
         elif which == "clear":
-            for key, obj in pipelines.items():
-                obj.clear()
+            for obj in pipelines.values():
+                if callable(getattr(obj, "clear", None)):
+                    obj.clear()
             win.clear()
         elif which == "coach":
             coach = pipelines.get("coach")
@@ -256,6 +273,29 @@ def main() -> None:
     app.aboutToQuit.connect(shutdown)
 
     bridge.toggle.connect(on_toggle)
+
+    def fill_voices() -> None:
+        from .voices import catalog
+
+        for lang, default in (("en", cfg["tts"]["voice"]), ("pt", cfg["dub"]["voice"])):
+            win.set_voices(lang, catalog(lang), voice_choice(lang, default))
+
+    def on_voice(lang: str, vid: str) -> None:
+        """Troca ao vivo: a próxima frase já sai com a voz nova; a amostra toca só no seu fone."""
+        from PySide6.QtCore import QSettings
+
+        from .voices import SAMPLE
+
+        QSettings("call-tradutor", "vozes").setValue(lang, vid)
+        queue = pipelines.get("_cable_voice" if lang == "en" else "_dub_voice")
+        if queue:
+            queue.kw["voice"] = vid
+        tts, ear = pipelines.get("_tts"), pipelines.get("_dub_voice")
+        if tts and ear:  # amostra no fone, nunca na call
+            ear.say_with(SAMPLE[lang], voice=vid, lang="en-us" if lang == "en" else "pt-br")
+
+    bridge.voice.connect(on_voice)
+    bridge.voices_ready.connect(fill_voices)
     if args.so_legenda:
         win.btn_mic.hide()
     if not cfg.get("coach", {}).get("enabled"):

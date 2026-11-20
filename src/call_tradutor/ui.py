@@ -8,8 +8,8 @@ import time
 
 from PySide6.QtCore import QObject, QPoint, QSettings, Qt, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPixmap
-from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
-                               QSizeGrip, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton,
+                               QScrollArea, QSizeGrip, QVBoxLayout, QWidget)
 
 LISTEN, SPEAK = "ouvir", "falar"
 
@@ -19,6 +19,8 @@ class Bridge(QObject):
     event = Signal(str, str, str)    # pipeline, tipo, texto
     status = Signal(str, bool)       # mensagem, é erro?
     toggle = Signal(str)             # "mic" | "captions" | "dub" | "coach" | "clear" | "quit"
+    voice = Signal(str, str)         # "en" (sua voz na call) | "pt" (dublagem), id da voz
+    voices_ready = Signal()          # o boot terminou: dá para preencher as listas de voz
 
 
 BTN_STYLE = """
@@ -32,6 +34,10 @@ QPushButton[win="true"] { background: transparent; color: #aaa; font-size: 14px;
 QPushButton[win="true"]:hover { background: rgba(255,255,255,0.15); color: #fff; }
 QPushButton#close:hover { background: rgba(230, 70, 70, 0.85); color: #fff; }
 QToolTip { color: #eee; background: #222; border: 1px solid #444; }
+QComboBox { color: #eee; background: rgba(255,255,255,0.10); border: none; border-radius: 6px;
+            padding: 3px 8px; font-size: 12px; min-width: 220px; }
+QComboBox:hover { background: rgba(255,255,255,0.18); }
+QComboBox QAbstractItemView { color: #eee; background: #1d1d23; selection-background-color: #2f9e5b; }
 QScrollArea { background: transparent; border: none; }
 QScrollArea > QWidget > QWidget { background: transparent; }
 QScrollBar:vertical { background: transparent; width: 8px; margin: 2px; }
@@ -131,7 +137,10 @@ class Overlay(QWidget):
         top.addWidget(self.dot)
         top.addWidget(title)
         top.addStretch(1)
-        for b in (self.btn_mic, self.btn_cap, self.btn_dub, self.btn_coach, btn_clear):
+        self.btn_cfg = QPushButton("⚙")
+        self.btn_cfg.setToolTip("Vozes: escolher a sua voz em inglês e a da dublagem")
+        self.btn_cfg.clicked.connect(lambda: self.voice_row.setVisible(not self.voice_row.isVisible()))
+        for b in (self.btn_mic, self.btn_cap, self.btn_dub, self.btn_coach, btn_clear, self.btn_cfg):
             top.addWidget(b)
         top.addSpacing(8)
         top.addWidget(btn_min)
@@ -168,6 +177,7 @@ class Overlay(QWidget):
         layout.setContentsMargins(14, 8, 8, 8)
         layout.addLayout(top)
         layout.addWidget(self.status)
+        layout.addWidget(self._voice_row())
         layout.addWidget(self.captions_area, 1)
         layout.addWidget(self.reply_area)
         layout.addLayout(bottom)
@@ -177,6 +187,35 @@ class Overlay(QWidget):
         self.render()
 
     # --- estado --------------------------------------------------------------------------
+    def _voice_row(self) -> QWidget:
+        """Linha do ⚙: listas de voz. Escolher já vale e toca uma amostra só no seu fone."""
+        self.voice_row = QWidget()
+        row = QHBoxLayout(self.voice_row)
+        row.setContentsMargins(0, 2, 0, 2)
+        self.voice_boxes: dict[str, QComboBox] = {}
+        for lang, label, tip in (("en", "🎤 Sua voz (EN):", "A voz que a outra pessoa ouve na call"),
+                                 ("pt", "🔊 Dublagem (PT):", "A voz em português no seu fone")):
+            lbl = QLabel(label)
+            lbl.setStyleSheet("color:#bbb; font-size:12px;")
+            box = QComboBox()
+            box.setToolTip(tip + ". Ao trocar, toca uma amostra só no seu fone.")
+            box.activated.connect(lambda _i, lg=lang, b=box: self.bridge.voice.emit(lg, b.currentData()))
+            self.voice_boxes[lang] = box
+            row.addWidget(lbl)
+            row.addWidget(box)
+            row.addSpacing(10)
+        row.addStretch(1)
+        self.voice_row.hide()
+        return self.voice_row
+
+    def set_voices(self, lang: str, options: dict[str, str], current: str) -> None:
+        box = self.voice_boxes[lang]
+        box.clear()
+        for vid, label in options.items():
+            box.addItem(label, vid)
+        i = box.findData(current)
+        box.setCurrentIndex(max(i, 0))
+
     def _toggle_btn(self, label: str, tip: str, which: str) -> QPushButton:
         btn = QPushButton(label)
         btn.setProperty("toggle", True)

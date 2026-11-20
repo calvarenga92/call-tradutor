@@ -68,6 +68,10 @@ class Ducker:
                     pass
             time.sleep(POLL_S)
 
+    def set_level(self, level: float) -> None:
+        """Muda o nível na hora (controle do ⚙). Vale a partir da próxima dublagem."""
+        self.level = max(0.0, min(level, 1.0))
+
     def duck(self) -> None:
         with self._lock:
             targets = []

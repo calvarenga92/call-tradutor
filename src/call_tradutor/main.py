@@ -102,7 +102,7 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
                 from .ducking import Ducker
 
                 pipelines["ducking"] = Ducker(d["device"] or a["loopback_device"] or "",
-                                              dub_player.playing, d.get("duck", 0.4))
+                                              dub_player.playing, duck_choice(d.get("duck", 0.4)))
             except Exception:  # noqa: BLE001
                 log.exception("ducking indisponível")
 
@@ -158,6 +158,13 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
     except Exception as e:  # noqa: BLE001
         log.exception("boot")
         bridge.status.emit(str(e), True)
+
+
+def duck_choice(default: float) -> float:
+    """Volume da voz original durante a dublagem: o do ⚙ (fica salvo) ou o do config.toml."""
+    from PySide6.QtCore import QSettings
+
+    return float(QSettings("call-tradutor", "vozes").value("duck", default))
 
 
 def voice_choice(lang: str, default: str) -> str:
@@ -295,6 +302,17 @@ def main() -> None:
             ear.say_with(SAMPLE[lang], voice=vid, lang="en-us" if lang == "en" else "pt-br")
 
     bridge.voice.connect(on_voice)
+
+    def on_duck(level: float) -> None:
+        from PySide6.QtCore import QSettings
+
+        QSettings("call-tradutor", "vozes").setValue("duck", level)
+        ducker = pipelines.get("ducking")
+        if ducker:
+            ducker.set_level(level)
+
+    bridge.duck.connect(on_duck)
+    win.set_duck(duck_choice(cfg["dub"].get("duck", 0.4)))
     bridge.voices_ready.connect(fill_voices)
     if args.so_legenda:
         win.btn_mic.hide()

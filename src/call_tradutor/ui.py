@@ -9,7 +9,7 @@ import time
 from PySide6.QtCore import QObject, QPoint, QSettings, Qt, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton,
-                               QScrollArea, QSizeGrip, QVBoxLayout, QWidget)
+                               QScrollArea, QSizeGrip, QSlider, QVBoxLayout, QWidget)
 
 LISTEN, SPEAK = "ouvir", "falar"
 
@@ -21,6 +21,7 @@ class Bridge(QObject):
     toggle = Signal(str)             # "mic" | "captions" | "dub" | "coach" | "clear" | "quit"
     voice = Signal(str, str)         # "en" (sua voz na call) | "pt" (dublagem), id da voz
     voices_ready = Signal()          # o boot terminou: dá para preencher as listas de voz
+    duck = Signal(float)             # volume da voz original enquanto a dublagem fala (0–1)
 
 
 BTN_STYLE = """
@@ -38,6 +39,9 @@ QComboBox { color: #eee; background: rgba(255,255,255,0.10); border: none; borde
             padding: 3px 8px; font-size: 12px; min-width: 220px; }
 QComboBox:hover { background: rgba(255,255,255,0.18); }
 QComboBox QAbstractItemView { color: #eee; background: #1d1d23; selection-background-color: #2f9e5b; }
+QSlider::groove:horizontal { height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; }
+QSlider::sub-page:horizontal { background: #2f9e5b; border-radius: 2px; }
+QSlider::handle:horizontal { background: #eee; width: 12px; margin: -5px 0; border-radius: 6px; }
 QScrollArea { background: transparent; border: none; }
 QScrollArea > QWidget > QWidget { background: transparent; }
 QScrollBar:vertical { background: transparent; width: 8px; margin: 2px; }
@@ -204,9 +208,30 @@ class Overlay(QWidget):
             row.addWidget(lbl)
             row.addWidget(box)
             row.addSpacing(10)
+        # volume da voz original (Meet) enquanto a dublagem fala
+        self.duck_label = QLabel()
+        self.duck_label.setStyleSheet("color:#bbb; font-size:12px;")
+        self.duck_slider = QSlider(Qt.Horizontal)
+        self.duck_slider.setRange(0, 100)
+        self.duck_slider.setSingleStep(5)
+        self.duck_slider.setFixedWidth(110)
+        self.duck_slider.setToolTip("Volume da voz original (o Meet) enquanto a dublagem em português fala")
+        self.duck_slider.valueChanged.connect(self._duck_changed)
+        row.addWidget(self.duck_label)
+        row.addWidget(self.duck_slider)
         row.addStretch(1)
         self.voice_row.hide()
         return self.voice_row
+
+    def _duck_changed(self, v: int) -> None:
+        self.duck_label.setText(f"🔉 Original: {v}%")
+        self.bridge.duck.emit(v / 100)
+
+    def set_duck(self, level: float) -> None:
+        self.duck_slider.blockSignals(True)
+        self.duck_slider.setValue(round(level * 100))
+        self.duck_slider.blockSignals(False)
+        self.duck_label.setText(f"🔉 Original: {round(level * 100)}%")
 
     def set_voices(self, lang: str, options: dict[str, str], current: str) -> None:
         box = self.voice_boxes[lang]

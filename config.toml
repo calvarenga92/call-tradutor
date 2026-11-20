@@ -42,7 +42,7 @@ start_on = true               # começa ligada (botão 🔊 desliga se em fala c
 voice = "pm_alex"             # vozes PT do Kokoro: pm_alex, pm_santa, pf_dora
 speed = 1.25                  # um pouco acelerada, para a dublagem acompanhar quem fala rápido
 device = ""                   # vazio = o mesmo fone do loopback_device
-duck = 0.4                    # enquanto a dublagem fala, o som original (Meet) cai para 40%. 1 = não abaixa
+duck = 0.28                   # enquanto a dublagem fala, o som original (Meet) cai para 28%. 1 = não abaixa (ajustável no ⚙)
 
 [coach]
 # Sugestão de resposta: quando a pessoa termina de falar, sugere o que você pode dizer,

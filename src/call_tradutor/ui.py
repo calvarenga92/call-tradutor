@@ -291,6 +291,8 @@ class Overlay(QWidget):
         return btn
 
     def set_status(self, msg: str, error: bool = False) -> None:
+        if not error and not msg.endswith("…"):
+            self._ok_status = msg  # volta para esta quando um aparelho reconectar
         loading = not error and msg.endswith("…")
         state = "error" if error else "loading" if loading else "ready"
         self.dot.setStyleSheet(f"color:{STATE_COLORS[state]}; font-size:14px;")
@@ -324,6 +326,9 @@ class Overlay(QWidget):
     def on_event(self, pipeline: str, kind: str, text: str) -> None:
         if kind == "error":
             self.set_status(f"{pipeline}: {text}", error=True)
+            return
+        if kind == "recovered":
+            self.set_status(getattr(self, "_ok_status", "pronto"))
             return
         if pipeline == "coach":
             if kind in ("reply_partial", "reply"):

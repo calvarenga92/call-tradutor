@@ -9,6 +9,7 @@ listen_capture = "processo"
 loopback_device = "Realtek"   # saída que você ouve (fone) — a mesma do "Alto-falante" do app da call. Vazio = saída padrão do Windows
 mic_device = "Fifine"         # seu microfone. Vazio = microfone padrão
 cable_device = "CABLE Input"  # microfone virtual (VB-Cable). Na call, escolha "CABLE Output" como microfone
+echo_hold_s = 1.0             # enquanto você fala (e até 1 s depois) o app não escuta a call: sua voz não volta como dublagem
 auto_default_mic = true       # 🎤 Fala ligada = CABLE Output vira o microfone padrão do Windows; desligada/fechado = volta o mic_device
 
 [stt]

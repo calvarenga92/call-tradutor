@@ -9,7 +9,7 @@ from typing import Callable
 import numpy as np
 
 from .audio import blocks
-from .segmenter import Segmenter
+from .segmenter import Segmenter, StreamingVAD
 from .stt import STT
 from .translate import Translator
 
@@ -32,7 +32,8 @@ class Pipeline:
     def __init__(self, name: str, device, src: str | None, stt: STT, translator: Translator,
                  segmenter: Segmenter, on_event: EventFn,
                  output: Callable[[str], None] | None = None,
-                 mute_when: threading.Event | None = None, translate_partials: bool = False):
+                 mute_when: threading.Event | None = None, translate_partials: bool = False,
+                 reopen: Callable[[], object] | None = None, track_voice: bool = False):
         self.name = name
         self.device = device
         self.src = src
@@ -43,6 +44,12 @@ class Pipeline:
         self.output = output
         self.mute_when = mute_when  # ex.: dublagem tocando no fone → não captar o próprio áudio
         self.translate_partials = translate_partials
+        # aparelho caiu (Windows invalidou, USB reconectou…): reabre pelo nome e segue
+        self.reopen = reopen
+        # trava de eco: o "ouvir" fica surdo enquanto você fala (e logo depois)
+        self.deaf_when: Callable[[], bool] | None = None
+        self.voice_at = 0.0  # última vez que o seu microfone ouviu fala (track_voice)
+        self._activity = StreamingVAD() if track_voice else None
         self.enabled = threading.Event()
         self.enabled.set()
         self.stop = threading.Event()
@@ -112,30 +119,51 @@ class Pipeline:
 
     # --- captura -------------------------------------------------------------------------
     def _capture(self) -> None:
-        try:
-            was_enabled = True
-            for block in blocks(self.device, self.stop):
-                if not self.enabled.is_set() or (self.mute_when and self.mute_when.is_set()):
-                    if was_enabled:
-                        self.segmenter.reset()
-                        was_enabled = False
-                    continue
-                was_enabled = True
-                if self._reset_segmenter:
-                    self._reset_segmenter = False
+        """Captura com reconexão: se o aparelho cair, tenta de novo a cada 1 s até voltar."""
+        self._failed = False
+        while not self.stop.is_set():
+            try:
+                if self._failed and self.reopen:
+                    self.device = self.reopen()
+                self._capture_loop()
+                return
+            except Exception as e:  # noqa: BLE001
+                if not self._failed:
+                    log.exception("captura %s", self.name)
+                    what = "Microfone" if self.name == "falar" else "Captura do som"
+                    self.on_event(self.name, "error", f"{what} caiu ({e}) — reconectando…")
+                self._failed = True
+                self.segmenter.reset()
+                self.stop.wait(1.0)
+
+    def _capture_loop(self) -> None:
+        was_enabled = True
+        for block in blocks(self.device, self.stop):
+            if self._failed:  # voltou depois de cair
+                self._failed = False
+                log.info("captura %s reconectada", self.name)
+                self.on_event(self.name, "recovered", "")
+            if self._activity is not None and self._activity.prob(block) > 0.5:
+                self.voice_at = time.monotonic()
+            deaf = self.deaf_when is not None and self.deaf_when()
+            if not self.enabled.is_set() or deaf or (self.mute_when and self.mute_when.is_set()):
+                if was_enabled:
                     self.segmenter.reset()
-                    continue
-                for kind, audio in self.segmenter.feed(block):
-                    if kind == "final":
-                        with self._partial_lock:
-                            self._partial = None
-                        self.finals.put(audio)
-                    else:
-                        with self._partial_lock:
-                            self._partial = audio
-        except Exception as e:  # noqa: BLE001
-            log.exception("captura %s", self.name)
-            self.on_event(self.name, "error", f"Erro na captura de áudio: {e}")
+                    was_enabled = False
+                continue
+            was_enabled = True
+            if self._reset_segmenter:
+                self._reset_segmenter = False
+                self.segmenter.reset()
+                continue
+            for kind, audio in self.segmenter.feed(block):
+                if kind == "final":
+                    with self._partial_lock:
+                        self._partial = None
+                    self.finals.put(audio)
+                else:
+                    with self._partial_lock:
+                        self._partial = audio
 
     # --- processamento -------------------------------------------------------------------
     def _work(self) -> None:

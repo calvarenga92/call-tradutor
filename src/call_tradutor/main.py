@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import threading
+import time
 
 from .config import ROOT, load_config
 from .gpu import setup_cuda_dlls
@@ -122,6 +123,7 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
         pipelines[LISTEN] = Pipeline(
             LISTEN, loop_dev, cfg["stt"].get("listen_language") or None, stt, listen_tr,
             Segmenter(**seg_args, partial_every_s=partial), on_event, output=dub,
+            reopen=None if echo_free else (lambda: audio.get_loopback(a["loopback_device"])[0]),
             mute_when=dub_player.playing if dub_player and not echo_free else None,
             translate_partials=bool(partial))
         pipelines[LISTEN].start()
@@ -149,7 +151,14 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
             speak_seg = {**seg_args, **cfg.get("vad_falar", {})}
             pipelines[SPEAK] = Pipeline(
                 SPEAK, mic_dev, "pt", stt, speak_tr, Segmenter(**speak_seg, partial_every_s=None),
-                on_event, output=to_cable)
+                on_event, output=to_cable, track_voice=True,
+                reopen=lambda: audio.get_mic(a["mic_device"])[0])
+            # trava de eco: enquanto você fala (e até `echo_hold_s` depois), o "ouvir" fica surdo,
+            # para a sua própria voz — vinda do celular ou de onde for — não voltar como dublagem
+            hold = a.get("echo_hold_s", 1.0)
+            if hold > 0:
+                me = pipelines[SPEAK]
+                pipelines[LISTEN].deaf_when = lambda: time.monotonic() - me.voice_at < hold
             pipelines[SPEAK].start()
             if cable and a.get("auto_default_mic", True) and sys.platform == "win32":
                 # Fala ligada = CABLE Output vira o microfone padrão do Windows (volta ao fechar)

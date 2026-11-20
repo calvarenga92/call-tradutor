@@ -132,7 +132,8 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
         # --- falar: seu microfone (português) → texto EN na tela (+ voz EN no VB-Cable) -----
         if not only_captions:
             mic_dev, mic_name = audio.get_mic(a["mic_device"])
-            cable_player = audio.Player(cable, tts.samplerate, tail_s=0) if cable else None
+            # tail_s: a "palavra" fica com você mais 0,8 s depois da voz, para o eco da call voltar e ser ignorado
+            cable_player = audio.Player(cable, tts.samplerate, tail_s=0.8) if cable else None
 
             cable_voice = None
             if cable_player:
@@ -162,6 +163,8 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
                 floor = Floor(hold)
                 pipelines[SPEAK].floor = floor
                 pipelines[LISTEN].floor = floor
+                if cable_player:  # sua voz em inglês tocando na call também é "você falando"
+                    pipelines[SPEAK].speaking_out = cable_player.playing
             pipelines[SPEAK].start()
             if cable and a.get("auto_default_mic", True) and sys.platform == "win32":
                 # Fala ligada = CABLE Output vira o microfone padrão do Windows (volta ao fechar)

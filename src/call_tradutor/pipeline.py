@@ -78,6 +78,8 @@ class Pipeline:
         self.reopen = reopen
         # trava de eco: o "ouvir" fica surdo enquanto você fala (e logo depois)
         self.floor: Floor | None = None  # quem está com a palavra (ver Floor)
+        # também conta como "falando": a sua voz traduzida tocando na call (ela pode voltar como eco)
+        self.speaking_out: threading.Event | None = None
         self._activity = StreamingVAD() if track_voice else None
         self.enabled = threading.Event()
         self.enabled.set()
@@ -174,7 +176,10 @@ class Pipeline:
                 self.on_event(self.name, "recovered", "")
             deaf = False
             if self.floor is not None and self._activity is not None:
-                self.floor.update(self.name, self._activity.prob(block) > 0.5)
+                talking = self._activity.prob(block) > 0.5
+                if self.speaking_out is not None and self.speaking_out.is_set():
+                    talking = True
+                self.floor.update(self.name, talking)
                 deaf = self.floor.is_deaf(self.name)
             if not self.enabled.is_set() or deaf or (self.mute_when and self.mute_when.is_set()):
                 if was_enabled:

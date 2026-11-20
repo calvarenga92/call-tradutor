@@ -27,6 +27,8 @@ gpu = [
 ]
 # Sem GPU NVIDIA (ex.: Mac): tudo na CPU, mais lento. Use stt.device = "cpu" e compute_type = "int8".
 cpu = ["onnxruntime>=1.18"]
+# Só para criar uma voz parecida com a sua (scripts/criar_voz.py): mede o timbre da gravação.
+voz = ["sherpa-onnx>=1.10"]
 
 [project.scripts]
 call-tradutor = "call_tradutor.main:main"

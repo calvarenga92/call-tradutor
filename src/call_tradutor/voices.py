@@ -53,7 +53,7 @@ def catalog(lang: str) -> dict[str, str]:
 
 def resolve(voice_id: str):
     """O que o Kokoro recebe: o nome da voz ou o vetor de uma voz personalizada."""
-    if voice_id.startswith("custom:"):
+    if isinstance(voice_id, str) and voice_id.startswith("custom:"):
         path = CUSTOM_DIR / f"{voice_id.split(':', 1)[1]}.npy"
         return np.load(path).astype(np.float32)
     return voice_id

@@ -43,7 +43,7 @@ class TTS:
         from .voices import resolve
 
         with self._lock:
-            samples, sr = self.kokoro.create(text, voice=resolve(voice or self.voice),
+            samples, sr = self.kokoro.create(text, voice=resolve(self.voice if voice is None else voice),
                                              speed=speed or self.speed, lang=lang)
         self.samplerate = sr
         return samples

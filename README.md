@@ -80,6 +80,19 @@ A janela fica sempre no topo, aparece na barra de tarefas (o — minimiza), é a
 - **Ajustes** ficam no `config.toml`: voz, sensibilidade do VAD, silêncio que fecha a frase, modelo de tradução.
 - **Log:** fica em `call-tradutor.log`, com tempo de cada etapa (`stt`, `tr`, `out`).
 
+## Voz parecida com a sua
+
+Cria uma voz do Kokoro que lembra a sua, misturando as vozes em inglês existentes. Não deixa o app mais lento.
+
+```
+.venv\Scripts\pip install -e .[voz]
+curl -L -o models/wespeaker_en_voxceleb_resnet34_LM.onnx https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/wespeaker_en_voxceleb_resnet34_LM.onnx
+.venv\Scripts\python scripts\gravar_minha_voz.py   # janela: lê um texto por 45 s
+.venv\Scripts\python scripts\criar_voz.py          # ~3 min; salva vozes/minha-voz.npy
+```
+
+A voz aparece com ★ no ⚙ do app. A gravação e a voz ficam em `vozes/`, fora do git.
+
 ## Sugestão de resposta
 
 Quando a outra pessoa termina de falar (`turn_gap_s` de silêncio), aparece um bloco **💡 Diga:** com o que você pode responder, em inglês (para falar) e em português logo abaixo (para entender o que está dizendo). Ele usa a conversa até ali e o seu `perfil.md` (experiência, stack, casos para contar). O modelo só usa fatos do perfil e, se não souber, sugere uma resposta honesta.

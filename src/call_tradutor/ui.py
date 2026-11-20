@@ -242,10 +242,21 @@ class Overlay(QWidget):
         lbl.setStyleSheet("color:#bbb; font-size:12px;")
         return lbl
 
+    MIN_GAP = 10  # pontos: a tradução fica sempre pelo menos isso acima da voz de fora
+
     def _slider_changed(self, key: str, v: int) -> None:
         _, lbl, text = self.sliders[key]
         lbl.setText(f"{text}: {v}%")
         (self.bridge.duck if key == "duck" else self.bridge.dub_gain).emit(v / 100)
+        # a tradução sempre mais alta que a voz de fora: um controle empurra o outro
+        duck, gain = self.sliders["duck"][0], self.sliders["dub_gain"][0]
+        if duck.value() > gain.value() - self.MIN_GAP:
+            if key == "duck":
+                gain.setValue(min(duck.value() + self.MIN_GAP, gain.maximum()))
+                if duck.value() > gain.value() - self.MIN_GAP:  # tradução já no máximo
+                    duck.setValue(gain.value() - self.MIN_GAP)
+            else:
+                duck.setValue(max(gain.value() - self.MIN_GAP, 0))
 
     def set_slider(self, key: str, level: float) -> None:
         sl, lbl, text = self.sliders[key]

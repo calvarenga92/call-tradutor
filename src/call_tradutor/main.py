@@ -112,7 +112,7 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
 
             dub_voice = SpeechQueue(tts, dub_player, voice=voice_choice("pt", d["voice"]),
                                     lang="pt-br", speed=d["speed"])
-            dub_voice.gain = dub_gain_choice()
+            dub_voice.gain = dub_gain_choice(d.get("gain", 0.9))
             pipelines["_dub_voice"] = dub_voice
 
         def dub(text: str) -> None:
@@ -168,11 +168,11 @@ def duck_choice(default: float) -> float:
     return float(QSettings("call-tradutor", "vozes").value("duck", default))
 
 
-def dub_gain_choice() -> float:
-    """Volume da dublagem em português escolhido no ⚙ (100% se nunca mexeu)."""
+def dub_gain_choice(default: float = 0.9) -> float:
+    """Volume da dublagem em português escolhido no ⚙ (o do config.toml se nunca mexeu)."""
     from PySide6.QtCore import QSettings
 
-    return float(QSettings("call-tradutor", "vozes").value("dub_gain", 1.0))
+    return float(QSettings("call-tradutor", "vozes").value("dub_gain", default))
 
 
 def voice_choice(lang: str, default: str) -> str:
@@ -331,7 +331,7 @@ def main() -> None:
             queue.gain = level
 
     bridge.dub_gain.connect(on_dub_gain)
-    win.set_slider("dub_gain", dub_gain_choice())
+    win.set_slider("dub_gain", dub_gain_choice(cfg["dub"].get("gain", 0.9)))
     bridge.voices_ready.connect(fill_voices)
     if args.so_legenda:
         win.btn_mic.hide()

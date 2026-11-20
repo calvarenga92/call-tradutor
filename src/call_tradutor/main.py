@@ -151,9 +151,19 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
                 SPEAK, mic_dev, "pt", stt, speak_tr, Segmenter(**speak_seg, partial_every_s=None),
                 on_event, output=to_cable)
             pipelines[SPEAK].start()
+            if cable and a.get("auto_default_mic", True) and sys.platform == "win32":
+                # Fala ligada = CABLE Output vira o microfone padrão do Windows (volta ao fechar)
+                try:
+                    from .default_mic import DefaultMic
+
+                    pipelines["_default_mic"] = DefaultMic(a["mic_device"])
+                    pipelines["_default_mic"].route(True)
+                except Exception:  # noqa: BLE001
+                    log.exception("troca automática do microfone padrão indisponível")
             status += f"  ·  mic: {mic_name}" + (" → VB-Cable" if cable else " (sem VB-Cable: só texto)")
 
         bridge.voices_ready.emit()
+        bridge.ready.emit(SPEAK in pipelines, "coach" in pipelines)
         log.info("pronto | %s", status)
         bridge.status.emit(status, False)
     except Exception as e:  # noqa: BLE001
@@ -249,7 +259,14 @@ def main() -> None:
         elif which == "mic":
             p = pipelines.get(SPEAK)
             if p:
-                win.set_toggle("mic", p.toggle())
+                on = p.toggle()
+                win.set_toggle("mic", on)
+                cable_voice = pipelines.get("_cable_voice")
+                if cable_voice and not on:
+                    cable_voice.flush()  # para de falar na call na hora
+                default_mic = pipelines.get("_default_mic")
+                if default_mic:
+                    default_mic.route(on)
         elif which == "clear":
             for obj in pipelines.values():
                 if callable(getattr(obj, "clear", None)):
@@ -266,6 +283,9 @@ def main() -> None:
         elif which == "dub":
             if dub_on.is_set():
                 dub_on.clear()
+                dub_voice = pipelines.get("_dub_voice")
+                if dub_voice:
+                    dub_voice.flush()  # para a dublagem na hora (e o Meet volta ao volume normal)
             else:
                 dub_on.set()
             win.set_toggle("dub", dub_on.is_set())
@@ -282,6 +302,9 @@ def main() -> None:
         ducker = pipelines.get("ducking")
         if ducker:
             ducker.close()  # devolve o volume do Meet antes de sair
+        default_mic = pipelines.get("_default_mic")
+        if default_mic:
+            default_mic.route(False, wait=True)  # seu microfone volta a ser o padrão
         # o modelo sai da memória na hora (não espera o keep_alive)
         translate.unload(t["ollama_url"], t["model"])
 

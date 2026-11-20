@@ -66,11 +66,24 @@ class SpeechQueue:
         self.player = player
         self.kw = speak_kw
         self.gain = 1.0  # volume (o da dublagem é ajustável no ⚙)
+        self.epoch = 0   # muda no flush: a frase que estava sendo gerada não toca
         self.q: "queue.Queue[str]" = queue.Queue()
         threading.Thread(target=self._run, name="fala", daemon=True).start()
 
     def say(self, text: str) -> None:
         self.q.put((text, None))
+
+    def flush(self) -> None:
+        """Descarta o que falta falar e corta o que está tocando."""
+        import queue
+
+        while True:
+            try:
+                self.q.get_nowait()
+            except queue.Empty:
+                break
+        self.epoch += 1
+        self.player.flush()
 
     def say_with(self, text: str, **kw) -> None:
         """Uma frase com outros parâmetros (ex.: amostra de voz), sem mudar a fila."""
@@ -79,8 +92,11 @@ class SpeechQueue:
     def _run(self) -> None:
         while True:
             text, extra = self.q.get()
+            ep = self.epoch
             try:
                 for chunk in self.tts.speak_chunks(text, **{**self.kw, **(extra or {})}):
+                    if ep != self.epoch:
+                        break
                     self.player.play(np.clip(chunk * self.gain, -1, 1) if self.gain != 1 else chunk)
             except Exception:  # noqa: BLE001
                 log.exception("fala")

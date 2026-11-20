@@ -104,7 +104,14 @@ class Player:
         self._queue: list[np.ndarray] = []
         self._cv = threading.Condition()
         self.playing = threading.Event()
+        self._cancel = threading.Event()
         threading.Thread(target=self._run, daemon=True).start()
+
+    def flush(self) -> None:
+        """Para na hora: descarta a fila e corta o que está tocando (botão desligado)."""
+        with self._cv:
+            self._queue.clear()
+            self._cancel.set()
 
     def play(self, samples: np.ndarray) -> None:
         with self._cv:
@@ -123,11 +130,17 @@ class Player:
                     while not self._queue:
                         self._cv.wait()
                     samples = self._queue.pop(0)
+                    self._cancel.clear()
                 self.playing.set()
                 # o "rabo" de silêncio cobre o atraso entre tocar e o loopback captar
                 mono = np.concatenate([samples, np.zeros(int(self.samplerate * self.tail_s),
                                                          dtype=np.float32)])
-                player.play(np.repeat(mono[:, None], n, axis=1))
+                # em fatias de 100 ms: dá para cortar no meio quando o botão é desligado
+                step = self.samplerate // 10
+                for i in range(0, len(mono), step):
+                    if self._cancel.is_set():
+                        break
+                    player.play(np.repeat(mono[i:i + step, None], n, axis=1))
                 with self._cv:
                     if not self._queue:
                         self.playing.clear()

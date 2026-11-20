@@ -97,6 +97,15 @@ class Pipeline:
     def toggle(self) -> bool:
         if self.enabled.is_set():
             self.enabled.clear()
+            # desligou: o que já estava gravado não é mais traduzido nem falado
+            self._epoch += 1
+            with self._partial_lock:
+                self._partial = None
+            while not self.finals.empty():
+                try:
+                    self.finals.get_nowait()
+                except queue.Empty:
+                    break
         else:
             self.enabled.set()
         return self.enabled.is_set()

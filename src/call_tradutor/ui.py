@@ -21,6 +21,7 @@ class Bridge(QObject):
     toggle = Signal(str)             # "mic" | "captions" | "dub" | "coach" | "clear" | "quit"
     voice = Signal(str, str)         # "en" (sua voz na call) | "pt" (dublagem), id da voz
     voices_ready = Signal()          # o boot terminou: dá para preencher as listas de voz
+    ready = Signal(bool, bool)       # boot terminou: (tem Fala?, tem Resposta?)
     duck = Signal(float)             # volume da voz de fora enquanto a dublagem fala (0–1)
     dub_gain = Signal(float)         # volume da dublagem em português (0–1,5)
 
@@ -32,6 +33,7 @@ QPushButton:hover { background: rgba(255,255,255,0.18); }
 QPushButton[toggle="true"] { color: #d7f5dc; background: rgba(80, 200, 120, 0.28); }
 QPushButton[toggle="true"]:hover { background: rgba(80, 200, 120, 0.40); }
 QPushButton[toggle="true"][off="true"] { color: #8a8a8a; background: rgba(255,255,255,0.06); }
+QPushButton:disabled { color: #555; background: rgba(255,255,255,0.04); }
 QPushButton[win="true"] { background: transparent; color: #aaa; font-size: 14px; padding: 2px 8px; }
 QPushButton[win="true"]:hover { background: rgba(255,255,255,0.15); color: #fff; }
 QPushButton#close:hover { background: rgba(230, 70, 70, 0.85); color: #fff; }
@@ -187,6 +189,10 @@ class Overlay(QWidget):
         layout.addWidget(self.reply_area)
         layout.addLayout(bottom)
 
+        # Fala e Resposta só funcionam depois de carregar: até lá, ficam apagados
+        for b in (self.btn_mic, self.btn_coach):
+            b.setEnabled(False)
+        bridge.ready.connect(self._on_ready)
         bridge.event.connect(self.on_event)
         bridge.status.connect(self.set_status)
         self.render()
@@ -272,6 +278,10 @@ class Overlay(QWidget):
             box.addItem(label, vid)
         i = box.findData(current)
         box.setCurrentIndex(max(i, 0))
+
+    def _on_ready(self, has_mic: bool, has_coach: bool) -> None:
+        self.btn_mic.setEnabled(has_mic)
+        self.btn_coach.setEnabled(has_coach)
 
     def _toggle_btn(self, label: str, tip: str, which: str) -> QPushButton:
         btn = QPushButton(label)

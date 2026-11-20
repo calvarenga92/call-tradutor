@@ -55,7 +55,7 @@ No Mac, o loopback precisa do [BlackHole](https://github.com/ExistentialAudio/Bl
 Ao instalar o VB-Cable, o Windows costuma pôr o cabo como saída e microfone padrão. Volte o seu fone e o seu microfone como padrão em **Som**; o app avisa e não liga se a saída padrão for o cabo (senão escutaria a própria voz).
 
 No app da call:
-- **Microfone:** `CABLE Output (VB-Audio Virtual Cable)`. A pessoa só ouve a voz traduzida.
+- **Microfone:** deixe no **Padrão**. Com o 🎤 Fala ligado, o app torna o `CABLE Output` o microfone padrão do Windows (a pessoa ouve a voz traduzida); com a Fala desligada ou o app fechado, volta o seu microfone (`auto_default_mic`). Também dá para escolher `CABLE Output` direto no app da call.
 - **Alto-falante:** o seu fone, o mesmo que o `loopback_device` (ou a saída padrão).
 
 Atalhos globais:

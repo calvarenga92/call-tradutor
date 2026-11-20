@@ -89,7 +89,7 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
                     dub_player.play(c)
 
         pipelines[LISTEN] = Pipeline(
-            LISTEN, loop_dev, None, stt, listen_tr, Segmenter(**seg_args, partial_every_s=partial),
+            LISTEN, loop_dev, cfg["stt"].get("listen_language") or None, stt, listen_tr, Segmenter(**seg_args, partial_every_s=partial),
             on_event, output=dub, mute_when=dub_player.playing if dub_player else None,
             translate_partials=bool(partial))
         pipelines[LISTEN].start()

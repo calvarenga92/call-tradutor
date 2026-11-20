@@ -114,7 +114,10 @@ class Player:
 
     def _run(self) -> None:
         init_thread()
-        with self.speaker.player(samplerate=self.samplerate, channels=1) as player:
+        # em todos os canais: mono (channels=1) sai só no lado esquerdo do fone
+        n = self.speaker.channels if isinstance(self.speaker.channels, int) else len(self.speaker.channels)
+        n = max(n, 1)
+        with self.speaker.player(samplerate=self.samplerate, channels=n) as player:
             while True:
                 with self._cv:
                     while not self._queue:
@@ -122,8 +125,9 @@ class Player:
                     samples = self._queue.pop(0)
                 self.playing.set()
                 # o "rabo" de silêncio cobre o atraso entre tocar e o loopback captar
-                player.play(np.concatenate([samples, np.zeros(int(self.samplerate * self.tail_s),
-                                                              dtype=np.float32)]))
+                mono = np.concatenate([samples, np.zeros(int(self.samplerate * self.tail_s),
+                                                         dtype=np.float32)])
+                player.play(np.repeat(mono[:, None], n, axis=1))
                 with self._cv:
                     if not self._queue:
                         self.playing.clear()

@@ -13,7 +13,8 @@ HALLUCINATIONS = {
 
 
 class STT:
-    def __init__(self, model: str, device: str, compute_type: str, hotwords: str = ""):
+    def __init__(self, model: str, device: str, compute_type: str, hotwords: str = "",
+                 listen_language: str = ""):  # listen_language é lido pelo main
         self.model = WhisperModel(model, device=device, compute_type=compute_type)
         self.hotwords = hotwords or None
         self.lock = threading.Lock()

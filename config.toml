@@ -3,11 +3,13 @@
 # Rode `python scripts/listar_dispositivos.py` para ver os nomes disponíveis.
 
 [audio]
-loopback_device = ""          # saída que você ouve (fone). Vazio = saída padrão do Windows (recomendado)
+loopback_device = "Realtek"   # saída que você ouve (fone) — a mesma do "Alto-falante" do app da call. Vazio = saída padrão do Windows
 mic_device = "Fifine"         # seu microfone. Vazio = microfone padrão
 cable_device = "CABLE Input"  # microfone virtual (VB-Cable). Na call, escolha "CABLE Output" como microfone
 
 [stt]
+# idioma da outra pessoa: "en" fixo é mais rápido e não erra a detecção. Vazio = detecta sozinho
+listen_language = "en"
 model = "large-v3-turbo"
 device = "cuda"
 compute_type = "float16"
@@ -33,7 +35,7 @@ voices_path = "models/voices-v1.0.bin"
 # Dublagem: o que a pessoa fala em inglês sai também em áudio, em português, no seu fone.
 # Enquanto a dublagem toca, a captura da call pausa (senão o programa ouviria a si mesmo).
 enabled = true               # carrega a dublagem (botão 🔊 / Ctrl+Alt+D liga e desliga)
-start_on = false              # começa desligada: em fala contínua a dublagem não acompanha
+start_on = true               # começa ligada (botão 🔊 desliga se em fala contínua ela não acompanhar)
 voice = "pm_alex"             # vozes PT do Kokoro: pm_alex, pm_santa, pf_dora
 speed = 1.15
 device = ""                   # vazio = o mesmo fone do loopback_device

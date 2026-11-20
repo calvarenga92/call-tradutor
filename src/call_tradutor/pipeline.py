@@ -47,6 +47,7 @@ class Pipeline:
         self._lang_left = 0
 
     LANG_REUSE = 6  # trechos com o idioma travado antes de detectar de novo
+    LANG_MIN_AUDIO = 16000 * 1.5  # só trechos de 1,5 s ou mais decidem o idioma
 
     def _lang_hint(self) -> str | None:
         if self.src is not None:
@@ -157,7 +158,8 @@ class Pipeline:
         text, lang = self.stt.transcribe(audio, hint, prompt=self._prev_text)
         t1 = time.perf_counter()
         if text and ep == self._epoch:
-            self._learn_lang(lang, detected=hint is None)
+            # trecho curto ("e", "hm") detecta idioma errado: não deixa ele travar a conversa
+            self._learn_lang(lang, detected=hint is None and len(audio) >= self.LANG_MIN_AUDIO)
             self._prev_text = text[-200:]
         if not text:
             self._emit(ep, "partial_src", "")

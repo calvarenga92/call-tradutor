@@ -65,6 +65,7 @@ class SpeechQueue:
         self.tts = tts
         self.player = player
         self.kw = speak_kw
+        self.gain = 1.0  # volume (o da dublagem é ajustável no ⚙)
         self.q: "queue.Queue[str]" = queue.Queue()
         threading.Thread(target=self._run, name="fala", daemon=True).start()
 
@@ -80,6 +81,6 @@ class SpeechQueue:
             text, extra = self.q.get()
             try:
                 for chunk in self.tts.speak_chunks(text, **{**self.kw, **(extra or {})}):
-                    self.player.play(chunk)
+                    self.player.play(np.clip(chunk * self.gain, -1, 1) if self.gain != 1 else chunk)
             except Exception:  # noqa: BLE001
                 log.exception("fala")

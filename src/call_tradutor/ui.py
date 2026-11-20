@@ -21,7 +21,8 @@ class Bridge(QObject):
     toggle = Signal(str)             # "mic" | "captions" | "dub" | "coach" | "clear" | "quit"
     voice = Signal(str, str)         # "en" (sua voz na call) | "pt" (dublagem), id da voz
     voices_ready = Signal()          # o boot terminou: dá para preencher as listas de voz
-    duck = Signal(float)             # volume da voz original enquanto a dublagem fala (0–1)
+    duck = Signal(float)             # volume da voz de fora enquanto a dublagem fala (0–1)
+    dub_gain = Signal(float)         # volume da dublagem em português (0–1,5)
 
 
 BTN_STYLE = """
@@ -192,46 +193,66 @@ class Overlay(QWidget):
 
     # --- estado --------------------------------------------------------------------------
     def _voice_row(self) -> QWidget:
-        """Linha do ⚙: listas de voz. Escolher já vale e toca uma amostra só no seu fone."""
+        """Painel do ⚙: listas de voz e os dois volumes. Tudo vale na hora e fica salvo."""
         self.voice_row = QWidget()
-        row = QHBoxLayout(self.voice_row)
-        row.setContentsMargins(0, 2, 0, 2)
+        col = QVBoxLayout(self.voice_row)
+        col.setContentsMargins(0, 2, 0, 2)
+        col.setSpacing(4)
+        row = QHBoxLayout()
         self.voice_boxes: dict[str, QComboBox] = {}
         for lang, label, tip in (("en", "🎤 Sua voz (EN):", "A voz que a outra pessoa ouve na call"),
                                  ("pt", "🔊 Dublagem (PT):", "A voz em português no seu fone")):
-            lbl = QLabel(label)
-            lbl.setStyleSheet("color:#bbb; font-size:12px;")
             box = QComboBox()
             box.setToolTip(tip + ". Ao trocar, toca uma amostra só no seu fone.")
             box.activated.connect(lambda _i, lg=lang, b=box: self.bridge.voice.emit(lg, b.currentData()))
             self.voice_boxes[lang] = box
-            row.addWidget(lbl)
+            row.addWidget(self._small(label))
             row.addWidget(box)
             row.addSpacing(10)
-        # volume da voz original (Meet) enquanto a dublagem fala
-        self.duck_label = QLabel()
-        self.duck_label.setStyleSheet("color:#bbb; font-size:12px;")
-        self.duck_slider = QSlider(Qt.Horizontal)
-        self.duck_slider.setRange(0, 100)
-        self.duck_slider.setSingleStep(5)
-        self.duck_slider.setFixedWidth(110)
-        self.duck_slider.setToolTip("Volume da voz original (o Meet) enquanto a dublagem em português fala")
-        self.duck_slider.valueChanged.connect(self._duck_changed)
-        row.addWidget(self.duck_label)
-        row.addWidget(self.duck_slider)
         row.addStretch(1)
+        col.addLayout(row)
+
+        # volumes: dublagem em português (no seu fone) e voz de fora durante a tradução
+        row2 = QHBoxLayout()
+        self.sliders: dict[str, tuple[QSlider, QLabel, str]] = {}
+        for key, text, maximum, tip in (
+                ("dub_gain", "🔊 Dublagem PT", 150, "Volume da voz em português que você ouve"),
+                ("duck", "🔉 Voz de fora durante a tradução", 100,
+                 "Volume da voz que vem da call (o Meet) enquanto a dublagem em português fala. "
+                 "Quando a dublagem termina, ela volta ao normal")):
+            lbl = self._small("")
+            sl = QSlider(Qt.Horizontal)
+            sl.setRange(0, maximum)
+            sl.setSingleStep(5)
+            sl.setFixedWidth(140)
+            sl.setToolTip(tip)
+            sl.valueChanged.connect(lambda v, k=key: self._slider_changed(k, v))
+            self.sliders[key] = (sl, lbl, text)
+            row2.addWidget(lbl)
+            row2.addWidget(sl)
+            row2.addSpacing(16)
+        row2.addStretch(1)
+        col.addLayout(row2)
         self.voice_row.hide()
         return self.voice_row
 
-    def _duck_changed(self, v: int) -> None:
-        self.duck_label.setText(f"🔉 Original: {v}%")
-        self.bridge.duck.emit(v / 100)
+    @staticmethod
+    def _small(text: str) -> QLabel:
+        lbl = QLabel(text)
+        lbl.setStyleSheet("color:#bbb; font-size:12px;")
+        return lbl
 
-    def set_duck(self, level: float) -> None:
-        self.duck_slider.blockSignals(True)
-        self.duck_slider.setValue(round(level * 100))
-        self.duck_slider.blockSignals(False)
-        self.duck_label.setText(f"🔉 Original: {round(level * 100)}%")
+    def _slider_changed(self, key: str, v: int) -> None:
+        _, lbl, text = self.sliders[key]
+        lbl.setText(f"{text}: {v}%")
+        (self.bridge.duck if key == "duck" else self.bridge.dub_gain).emit(v / 100)
+
+    def set_slider(self, key: str, level: float) -> None:
+        sl, lbl, text = self.sliders[key]
+        sl.blockSignals(True)
+        sl.setValue(round(level * 100))
+        sl.blockSignals(False)
+        lbl.setText(f"{text}: {round(level * 100)}%")
 
     def set_voices(self, lang: str, options: dict[str, str], current: str) -> None:
         box = self.voice_boxes[lang]

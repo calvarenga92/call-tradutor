@@ -6,7 +6,7 @@ A posição e a largura ficam salvas entre uma abertura e outra.
 import html
 import time
 
-from PySide6.QtCore import QObject, QPoint, QSettings, Qt, Signal
+from PySide6.QtCore import QMimeData, QObject, QPoint, QSettings, Qt, QUrl, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton,
                                QScrollArea, QSizeGrip, QSlider, QVBoxLayout, QWidget)
@@ -22,6 +22,7 @@ class Bridge(QObject):
     voice = Signal(str, str)         # "en" (sua voz na call) | "pt" (dublagem), id da voz
     voices_ready = Signal()          # o boot terminou: dá para preencher as listas de voz
     ready = Signal(bool, bool)       # boot terminou: (tem Fala?, tem Resposta?)
+    msg_state = Signal(str, str)     # modo mensagem: recording | working | done | error | idle
     duck = Signal(float)             # volume da voz de fora enquanto a dublagem fala (0–1)
     dub_gain = Signal(float)         # volume da dublagem em português (0–1,5)
 
@@ -34,6 +35,7 @@ QPushButton[toggle="true"] { color: #d7f5dc; background: rgba(80, 200, 120, 0.28
 QPushButton[toggle="true"]:hover { background: rgba(80, 200, 120, 0.40); }
 QPushButton[toggle="true"][off="true"] { color: #8a8a8a; background: rgba(255,255,255,0.06); }
 QPushButton:disabled { color: #555; background: rgba(255,255,255,0.04); }
+QPushButton#msg[rec="true"] { color: #fff; background: rgba(220, 60, 60, 0.85); }
 QPushButton[win="true"] { background: transparent; color: #aaa; font-size: 14px; padding: 2px 8px; }
 QPushButton[win="true"]:hover { background: rgba(255,255,255,0.15); color: #fff; }
 QPushButton#close:hover { background: rgba(230, 70, 70, 0.85); color: #fff; }
@@ -126,6 +128,14 @@ class Overlay(QWidget):
             "💬 Legenda", "Mostra em português o que a outra pessoa fala (Ctrl+Alt+L)", "captions")
         self.btn_dub = self._toggle_btn("🔊 Dublagem", "Voz em português no seu fone (Ctrl+Alt+D)", "dub")
         self.btn_coach = self._toggle_btn("💡 Resposta", "Sugere o que responder (Ctrl+Alt+R)", "coach")
+        self.btn_msg = QPushButton("🎙️ Mensagem")
+        self.btn_msg.setObjectName("msg")
+        self.btn_msg.setToolTip("Modo mensagem (Ctrl+Alt+G): clique, fale a mensagem inteira em português "
+                                "e clique de novo. O áudio em inglês vai para a área de transferência: "
+                                "no WhatsApp, Ctrl+V e enviar.")
+        self.btn_msg.clicked.connect(lambda: bridge.toggle.emit("msg"))
+        self.btn_msg.setEnabled(False)
+        bridge.msg_state.connect(self.set_msg_state)
         btn_clear = QPushButton("🧹")
         btn_clear.setToolTip("Limpar: apaga a tela e o contexto da conversa (Ctrl+Alt+C)")
         btn_clear.clicked.connect(lambda: bridge.toggle.emit("clear"))
@@ -147,7 +157,8 @@ class Overlay(QWidget):
         self.btn_cfg = QPushButton("⚙")
         self.btn_cfg.setToolTip("Vozes: escolher a sua voz em inglês e a da dublagem")
         self.btn_cfg.clicked.connect(lambda: self.voice_row.setVisible(not self.voice_row.isVisible()))
-        for b in (self.btn_mic, self.btn_cap, self.btn_dub, self.btn_coach, btn_clear, self.btn_cfg):
+        for b in (self.btn_mic, self.btn_cap, self.btn_dub, self.btn_coach, self.btn_msg, btn_clear,
+                  self.btn_cfg):
             top.addWidget(b)
         top.addSpacing(8)
         top.addWidget(btn_min)
@@ -282,6 +293,31 @@ class Overlay(QWidget):
     def _on_ready(self, has_mic: bool, has_coach: bool) -> None:
         self.btn_mic.setEnabled(has_mic)
         self.btn_coach.setEnabled(has_coach)
+        self.btn_msg.setEnabled(True)
+
+    def set_msg_state(self, state: str, data: str) -> None:
+        """Botão 🎙️ Mensagem e o resultado: o arquivo vai para a área de transferência."""
+        b = self.btn_msg
+        b.setProperty("rec", state == "recording")
+        b.style().unpolish(b)
+        b.style().polish(b)
+        b.setEnabled(state != "working")
+        b.setText({"recording": "⏺ Gravando… clique p/ terminar",
+                   "working": f"⏳ {data}"}.get(state, "🎙️ Mensagem"))
+        if state == "recording":
+            self.set_status("🎙️ Fale a mensagem inteira em português e clique no botão vermelho para terminar.")
+        elif state == "done":
+            path, en, pt = data.split("\x1f")
+            mime = QMimeData()
+            mime.setUrls([QUrl.fromLocalFile(path)])
+            QApplication.clipboard().setMimeData(mime)
+            self.entries.append(["msg", en, pt])
+            self.set_status("✓ Áudio em inglês copiado — no WhatsApp: Ctrl+V e enviar.")
+            self.render()
+        elif state == "error":
+            self.set_status(data, error=True)
+        elif state == "idle":
+            self.set_status(getattr(self, "_ok_status", "pronto"))
 
     def _toggle_btn(self, label: str, tip: str, which: str) -> QPushButton:
         btn = QPushButton(label)
@@ -374,7 +410,14 @@ class Overlay(QWidget):
         # prévia continua o último parágrafo, se a pessoa não fez pausa longa
         attach = bool(self.entries) and self.entries[-1][0] == "them" and             time.monotonic() - self._last_them < PARAGRAPH_GAP_S
         parts = []
-        for i, (who, text) in enumerate(self.entries):
+        for i, (who, text, *extra) in enumerate(self.entries):
+            if who == "msg":
+                pt = extra[0] if extra else ""
+                parts.append(f"<p style='margin:0 0 8px 0; color:#8fc3ff; font-size:{small}px'>"
+                             f"✉ Mensagem → {html.escape(text)}<br>"
+                             f"<span style='color:#7d8a99; font-size:{max(small - 3, 11)}px'>"
+                             f"{html.escape(pt)}</span></p>")
+                continue
             if who == "them":
                 tail = ""
                 if i == len(self.entries) - 1 and self.preview and attach:

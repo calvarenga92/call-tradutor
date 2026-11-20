@@ -80,6 +80,16 @@ A janela fica sempre no topo, aparece na barra de tarefas (o — minimiza), é a
 - **Ajustes** ficam no `config.toml`: voz, sensibilidade do VAD, silêncio que fecha a frase, modelo de tradução.
 - **Log:** fica em `call-tradutor.log`, com tempo de cada etapa (`stt`, `tr`, `out`).
 
+## Modo mensagem (áudios de WhatsApp)
+
+Em tempo real, um áudio de WhatsApp sairia com silêncio enquanto você fala (o inglês chega depois). No modo mensagem:
+
+1. Clique em **🎙️ Mensagem** (ou `Ctrl+Alt+G`) e fale a mensagem inteira em português.
+2. Clique de novo no botão vermelho. O app transcreve tudo, traduz de uma vez (mais natural que em trechos) e gera um `.ogg` com a sua voz em inglês.
+3. O arquivo já vai para a área de transferência: no WhatsApp, **Ctrl+V** e enviar.
+
+Enquanto grava a mensagem, a Fala ao vivo pausa (nada vai para a call). Os áudios ficam em `mensagens/`, fora do git. Precisa do `ffmpeg` no PATH para o `.ogg`; sem ele, sai `.wav`.
+
 ## Voz parecida com a sua
 
 Cria uma voz do Kokoro que lembra a sua, misturando as vozes em inglês existentes. Não deixa o app mais lento.

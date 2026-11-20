@@ -177,6 +177,18 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
                     log.exception("troca automática do microfone padrão indisponível")
             status += f"  ·  mic: {mic_name}" + (" → VB-Cable" if cable else " (sem VB-Cable: só texto)")
 
+        if tts is not None:
+            # modo mensagem: grava tudo, traduz de uma vez e entrega um áudio pronto (WhatsApp)
+            from .message import MessageMode
+
+            def msg_voice():
+                q = pipelines.get("_cable_voice")
+                return q.kw.get("voice") if q else voice_choice("en", cfg["tts"]["voice"])
+
+            pipelines["_msg"] = MessageMode(
+                stt, Translator(t["ollama_url"], t["model"], "pt", "en", 0), tts,
+                get_mic=lambda: audio.get_mic(a["mic_device"])[0], get_voice=msg_voice,
+                on_state=bridge.msg_state.emit)
         bridge.voices_ready.emit()
         bridge.ready.emit(SPEAK in pipelines, "coach" in pipelines)
         log.info("pronto | %s", status)
@@ -223,6 +235,7 @@ def start_hotkeys(cfg: dict, bridge: Bridge) -> None:
         hk["toggle_coach"]: lambda: bridge.toggle.emit("coach"),
         hk.get("clear", "<ctrl>+<alt>+c"): lambda: bridge.toggle.emit("clear"),
         hk.get("quit", "<ctrl>+<alt>+q"): lambda: bridge.toggle.emit("quit"),
+        hk.get("message", "<ctrl>+<alt>+g"): lambda: bridge.toggle.emit("msg"),
     }).start()
 
 
@@ -268,9 +281,29 @@ def main() -> None:
     if cfg["dub"]["enabled"] and cfg["dub"].get("start_on", False):
         dub_on.set()
 
+    msg_paused_live = [False]
+
     def on_toggle(which: str) -> None:
         if which == "quit":
             win.close()  # salva a posição e encerra (ver shutdown)
+        elif which == "msg":
+            m, live = pipelines.get("_msg"), pipelines.get(SPEAK)
+            if not m or m.busy:
+                return
+            if m.recording:
+                m.stop()
+                if live and msg_paused_live[0]:
+                    live.enabled.set()  # a Fala ao vivo volta como estava
+                msg_paused_live[0] = False
+            else:
+                # enquanto grava a mensagem, a Fala ao vivo não manda nada para a call
+                msg_paused_live[0] = bool(live and live.enabled.is_set())
+                if msg_paused_live[0]:
+                    live.toggle()
+                    cable_voice = pipelines.get("_cable_voice")
+                    if cable_voice:
+                        cable_voice.flush()
+                m.start()
         elif which == "mic":
             p = pipelines.get(SPEAK)
             if p:

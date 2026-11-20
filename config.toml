@@ -85,3 +85,4 @@ toggle_dub = "<ctrl>+<alt>+d"      # liga/desliga a dublagem em português no fo
 toggle_coach = "<ctrl>+<alt>+r"    # liga/desliga a sugestão de resposta
 clear = "<ctrl>+<alt>+c"           # limpa a tela e o contexto da conversa
 quit = "<ctrl>+<alt>+q"            # encerra o app (o mesmo que o ✕)
+message = "<ctrl>+<alt>+g"         # modo mensagem: grava, traduz tudo e copia o áudio (Ctrl+V no WhatsApp)

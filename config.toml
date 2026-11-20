@@ -40,7 +40,7 @@ voices_path = "models/voices-v1.0.bin"
 enabled = true               # carrega a dublagem (botão 🔊 / Ctrl+Alt+D liga e desliga)
 start_on = true               # começa ligada (botão 🔊 desliga se em fala contínua ela não acompanhar)
 voice = "pm_alex"             # vozes PT do Kokoro: pm_alex, pm_santa, pf_dora
-speed = 1.15
+speed = 1.25                  # um pouco acelerada, para a dublagem acompanhar quem fala rápido
 device = ""                   # vazio = o mesmo fone do loopback_device
 duck = 0.4                    # enquanto a dublagem fala, o som original (Meet) cai para 40%. 1 = não abaixa
 
@@ -54,18 +54,19 @@ profile = "perfil.md"
 
 [vad]
 threshold = 0.5               # 0–1, maior = exige fala mais clara
-silence_ms = 1000             # pausa que fecha uma frase: 1 s, para não cortar quem está pensando ("hmm…")
+silence_ms = 700              # pausa que fecha a frase (os "hmm" sozinhos já são ignorados)
 min_speech_ms = 250           # ignora ruídos mais curtos que isso
-soft_max_s = 6.0              # depois disso, qualquer respiração já fecha o trecho
-max_utterance_s = 12.0        # corte forçado para quem fala sem parar
+soft_max_s = 3.0              # depois de 3 s, a próxima respiração já fecha o trecho
+max_utterance_s = 6.0         # corte forçado para quem fala sem parar
+soft_silence_ms = 100         # "respiração": pausa mínima para esse corte (entre palavras é menos)
 
 [vad_falar]
 # A sua fala: frases curtas saem inteiras; frase longa é cortada na primeira respiração depois
-# de ~3,5 s, para a voz em inglês começar enquanto você ainda fala (antes esperava a frase toda).
-silence_ms = 500              # pausa que fecha a frase
-soft_max_s = 3.5              # depois disso, a próxima respiração/vírgula já fecha o trecho
-soft_silence_ms = 150         # "respiração": pausa mínima para cortar depois dos 3,5 s (entre palavras é < 100 ms)
-max_utterance_s = 8.0         # corte forçado para quem fala sem respirar
+# de ~2,5 s, para a voz em inglês começar enquanto você ainda fala (antes esperava a frase toda).
+silence_ms = 450              # pausa que fecha a frase
+soft_max_s = 2.5              # depois de 2,5 s, a próxima respiração já fecha o trecho
+soft_silence_ms = 100         # "respiração": pausa mínima para esse corte
+max_utterance_s = 5.0         # corte forçado para quem fala sem respirar
 
 [ui]
 font_size = 22

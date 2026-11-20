@@ -63,7 +63,7 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
 
         seg_args = dict(threshold=v["threshold"], silence_ms=v["silence_ms"],
                         min_speech_ms=v["min_speech_ms"], soft_max_s=v["soft_max_s"],
-                        max_utterance_s=v["max_utterance_s"])
+                        max_utterance_s=v["max_utterance_s"], soft_silence_ms=v.get("soft_silence_ms", 0))
         partial = ui.get("partial_every_s", 0.6) if ui["partials"] else None
         d = cfg["dub"]
         cable = None if only_captions else audio.get_cable(a["cable_device"])

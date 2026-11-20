@@ -24,6 +24,36 @@ _FILLER = re.compile(
 def is_filler(text: str) -> bool:
     return bool(_FILLER.fullmatch(text.strip()))
 
+
+class Floor:
+    """Quem está com a palavra: você ("falar") ou a call ("ouvir").
+
+    Quem começa a falar primeiro fica com a palavra; o outro lado é ignorado até quem fala ficar
+    `hold_s` em silêncio. Resolve os dois vazamentos:
+    - o som da call vaza no seu microfone (fone alto, perto do mic) → não vira "sua fala";
+    - a sua voz volta pela call (microfone do outro lado aberto) → não vira dublagem.
+    """
+
+    def __init__(self, hold_s: float = 1.0):
+        self.hold_s = hold_s
+        self.last: dict[str, float] = {}
+        self.owner: str | None = None
+        self._lock = threading.Lock()
+
+    def update(self, side: str, active: bool) -> None:
+        if not active:
+            return
+        now = time.monotonic()
+        with self._lock:
+            self.last[side] = now
+            if self.owner is None or now - self.last.get(self.owner, 0) > self.hold_s:
+                self.owner = side
+
+    def is_deaf(self, side: str) -> bool:
+        with self._lock:
+            o = self.owner
+            return o is not None and o != side and time.monotonic() - self.last.get(o, 0) < self.hold_s
+
 # on_event(pipeline, tipo, texto). Tipos: partial_src, src, partial_dst, dst, error
 EventFn = Callable[[str, str, str], None]
 
@@ -47,8 +77,7 @@ class Pipeline:
         # aparelho caiu (Windows invalidou, USB reconectou…): reabre pelo nome e segue
         self.reopen = reopen
         # trava de eco: o "ouvir" fica surdo enquanto você fala (e logo depois)
-        self.deaf_when: Callable[[], bool] | None = None
-        self.voice_at = 0.0  # última vez que o seu microfone ouviu fala (track_voice)
+        self.floor: Floor | None = None  # quem está com a palavra (ver Floor)
         self._activity = StreamingVAD() if track_voice else None
         self.enabled = threading.Event()
         self.enabled.set()
@@ -143,9 +172,10 @@ class Pipeline:
                 self._failed = False
                 log.info("captura %s reconectada", self.name)
                 self.on_event(self.name, "recovered", "")
-            if self._activity is not None and self._activity.prob(block) > 0.5:
-                self.voice_at = time.monotonic()
-            deaf = self.deaf_when is not None and self.deaf_when()
+            deaf = False
+            if self.floor is not None and self._activity is not None:
+                self.floor.update(self.name, self._activity.prob(block) > 0.5)
+                deaf = self.floor.is_deaf(self.name)
             if not self.enabled.is_set() or deaf or (self.mute_when and self.mute_when.is_set()):
                 if was_enabled:
                     self.segmenter.reset()

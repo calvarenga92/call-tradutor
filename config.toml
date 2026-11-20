@@ -9,7 +9,7 @@ listen_capture = "processo"
 loopback_device = "Realtek"   # saída que você ouve (fone) — a mesma do "Alto-falante" do app da call. Vazio = saída padrão do Windows
 mic_device = "Fifine"         # seu microfone. Vazio = microfone padrão
 cable_device = "CABLE Input"  # microfone virtual (VB-Cable). Na call, escolha "CABLE Output" como microfone
-echo_hold_s = 1.0             # enquanto você fala (e até 1 s depois) o app não escuta a call: sua voz não volta como dublagem
+echo_hold_s = 1.0             # quem começa a falar fica com a palavra; o outro lado é ignorado até 1 s de silêncio (evita vazamentos e eco). 0 = desliga
 auto_default_mic = true       # 🎤 Fala ligada = CABLE Output vira o microfone padrão do Windows; desligada/fechado = volta o mic_device
 
 [stt]
@@ -57,10 +57,10 @@ profile = "perfil.md"
 
 [vad]
 threshold = 0.5               # 0–1, maior = exige fala mais clara
-silence_ms = 700              # pausa que fecha a frase (os "hmm" sozinhos já são ignorados)
+silence_ms = 500              # pausa que fecha a frase (os "hmm" sozinhos já são ignorados)
 min_speech_ms = 250           # ignora ruídos mais curtos que isso
-soft_max_s = 3.0              # depois de 3 s, a próxima respiração já fecha o trecho
-max_utterance_s = 6.0         # corte forçado para quem fala sem parar
+soft_max_s = 2.0              # depois de 2 s, a próxima respiração já fecha o trecho
+max_utterance_s = 4.0         # corte forçado (no ponto de fala mais fraca) para quem fala sem parar
 soft_silence_ms = 100         # "respiração": pausa mínima para esse corte (entre palavras é menos)
 
 [vad_falar]

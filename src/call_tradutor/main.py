@@ -125,7 +125,7 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
             Segmenter(**seg_args, partial_every_s=partial), on_event, output=dub,
             reopen=None if echo_free else (lambda: audio.get_loopback(a["loopback_device"])[0]),
             mute_when=dub_player.playing if dub_player and not echo_free else None,
-            translate_partials=bool(partial))
+            translate_partials=bool(partial), track_voice=True)
         pipelines[LISTEN].start()
         status = f"ouvindo: {loop_name}" + ("  ·  dublagem PT" if dub_player else "")
 
@@ -157,8 +157,11 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
             # para a sua própria voz — vinda do celular ou de onde for — não voltar como dublagem
             hold = a.get("echo_hold_s", 1.0)
             if hold > 0:
-                me = pipelines[SPEAK]
-                pipelines[LISTEN].deaf_when = lambda: time.monotonic() - me.voice_at < hold
+                from .pipeline import Floor
+
+                floor = Floor(hold)
+                pipelines[SPEAK].floor = floor
+                pipelines[LISTEN].floor = floor
             pipelines[SPEAK].start()
             if cable and a.get("auto_default_mic", True) and sys.platform == "win32":
                 # Fala ligada = CABLE Output vira o microfone padrão do Windows (volta ao fechar)

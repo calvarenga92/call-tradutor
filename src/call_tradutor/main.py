@@ -77,7 +77,19 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
             tts.speak("Ready.")  # aquece
 
         # --- ouvir: o que toca no fone (qualquer idioma) → legenda PT (+ dublagem PT no fone) -------
-        loop_dev, loop_name = audio.get_loopback(a["loopback_device"])
+        # captura "tudo menos o app": a dublagem não volta na captura, então não precisa pausar
+        # enquanto ela toca (e nada do que a outra pessoa fala se perde)
+        echo_free = False
+        if a.get("listen_capture", "processo") == "processo" and sys.platform == "win32":
+            from . import process_loopback
+            echo_free = process_loopback.available()
+            if not echo_free:
+                log.warning("captura por processo indisponível; usando o loopback do dispositivo")
+        if echo_free:
+            loop_dev = process_loopback.ProcessLoopback()
+            loop_name = loop_dev.name
+        else:
+            loop_dev, loop_name = audio.get_loopback(a["loopback_device"])
         dub_player = None
         if tts is not None and d["enabled"]:
             dub_player = audio.Player(audio.get_output(d["device"] or a["loopback_device"]),
@@ -89,8 +101,9 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
                     dub_player.play(c)
 
         pipelines[LISTEN] = Pipeline(
-            LISTEN, loop_dev, cfg["stt"].get("listen_language") or None, stt, listen_tr, Segmenter(**seg_args, partial_every_s=partial),
-            on_event, output=dub, mute_when=dub_player.playing if dub_player else None,
+            LISTEN, loop_dev, cfg["stt"].get("listen_language") or None, stt, listen_tr,
+            Segmenter(**seg_args, partial_every_s=partial), on_event, output=dub,
+            mute_when=dub_player.playing if dub_player and not echo_free else None,
             translate_partials=bool(partial))
         pipelines[LISTEN].start()
         status = f"ouvindo: {loop_name}" + ("  ·  dublagem PT" if dub_player else "")

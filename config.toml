@@ -3,6 +3,9 @@
 # Rode `python scripts/listar_dispositivos.py` para ver os nomes disponíveis.
 
 [audio]
+# "processo" = escuta todo o som do PC menos o do próprio app (a dublagem não volta na captura,
+# então nada do que a outra pessoa fala se perde). "dispositivo" = modo antigo, pelo loopback_device.
+listen_capture = "processo"
 loopback_device = "Realtek"   # saída que você ouve (fone) — a mesma do "Alto-falante" do app da call. Vazio = saída padrão do Windows
 mic_device = "Fifine"         # seu microfone. Vazio = microfone padrão
 cable_device = "CABLE Input"  # microfone virtual (VB-Cable). Na call, escolha "CABLE Output" como microfone

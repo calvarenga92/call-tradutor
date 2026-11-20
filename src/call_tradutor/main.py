@@ -95,6 +95,16 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
             dub_player = audio.Player(audio.get_output(d["device"] or a["loopback_device"]),
                                       tts.samplerate)
 
+        if dub_player and d.get("duck", 0.4) < 1 and sys.platform == "win32":
+            # abaixa o Meet enquanto a dublagem toca, para as duas vozes não se embolarem
+            try:
+                from .ducking import Ducker
+
+                pipelines["ducking"] = Ducker(d["device"] or a["loopback_device"] or "",
+                                              dub_player.playing, d.get("duck", 0.4))
+            except Exception:  # noqa: BLE001
+                log.exception("ducking indisponível")
+
         def dub(text: str) -> None:
             if dub_player and dub_on.is_set():
                 for c in tts.speak_chunks(text, voice=d["voice"], lang="pt-br", speed=d["speed"]):
@@ -127,6 +137,7 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
             pipelines[SPEAK].start()
             status += f"  ·  mic: {mic_name}" + (" → VB-Cable" if cable else " (sem VB-Cable: só texto)")
 
+        log.info("pronto | %s", status)
         bridge.status.emit(status, False)
     except Exception as e:  # noqa: BLE001
         log.exception("boot")
@@ -226,6 +237,9 @@ def main() -> None:
             stop = getattr(obj, "stop", None)
             if isinstance(stop, threading.Event):
                 stop.set()
+        ducker = pipelines.get("ducking")
+        if ducker:
+            ducker.close()  # devolve o volume do Meet antes de sair
         # o modelo sai da memória na hora (não espera o keep_alive)
         translate.unload(t["ollama_url"], t["model"])
 

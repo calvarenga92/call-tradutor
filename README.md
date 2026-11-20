@@ -72,6 +72,8 @@ A janela fica sempre no topo, aparece na barra de tarefas (o — minimiza), é a
 - **Use fone de ouvido.**
 - **Feche outros áudios** (YouTube, música): o loopback captura tudo o que sai na saída escolhida.
 - **Avise a outra pessoa** que você está usando tradução automática; ela vai notar o atraso.
+- **A dublagem não embola com a voz original:** enquanto ela fala, o som dos outros apps no seu fone (o Meet) cai para 40% (`[dub] duck`) e volta depois. Só o volume por app muda; ao fechar, tudo volta ao normal.
+- **Espera a pessoa terminar o pensamento:** a frase só fecha depois de 1 s de pausa (`[vad] silence_ms`), e "hmm", "uh", "oooh" sozinhos são ignorados.
 - **Nada da outra pessoa se perde com a dublagem ligada:** no Windows 10 (2004+) e 11 o app escuta todo o som do PC **menos o dele mesmo** (`listen_capture = "processo"`), então a voz em português não volta na captura e ele não precisa parar de escutar enquanto ela toca. Feche YouTube e música durante a call, já que eles entram na escuta.
 - **Sua fala sai em frases inteiras:** a seção `[vad_falar]` espera ~0,7 s de pausa antes de traduzir, para a voz em inglês não sair picada.
 - **Ajustes** ficam no `config.toml`: voz, sensibilidade do VAD, silêncio que fecha a frase, modelo de tradução.

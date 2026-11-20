@@ -42,6 +42,7 @@ start_on = true               # começa ligada (botão 🔊 desliga se em fala c
 voice = "pm_alex"             # vozes PT do Kokoro: pm_alex, pm_santa, pf_dora
 speed = 1.15
 device = ""                   # vazio = o mesmo fone do loopback_device
+duck = 0.4                    # enquanto a dublagem fala, o som original (Meet) cai para 40%. 1 = não abaixa
 
 [coach]
 # Sugestão de resposta: quando a pessoa termina de falar, sugere o que você pode dizer,
@@ -53,10 +54,10 @@ profile = "perfil.md"
 
 [vad]
 threshold = 0.5               # 0–1, maior = exige fala mais clara
-silence_ms = 300              # silêncio que fecha uma frase
+silence_ms = 1000             # pausa que fecha uma frase: 1 s, para não cortar quem está pensando ("hmm…")
 min_speech_ms = 250           # ignora ruídos mais curtos que isso
-soft_max_s = 2.0              # depois disso, qualquer respiração já fecha o trecho
-max_utterance_s = 3.5         # corte forçado para quem fala sem parar
+soft_max_s = 6.0              # depois disso, qualquer respiração já fecha o trecho
+max_utterance_s = 12.0        # corte forçado para quem fala sem parar
 
 [vad_falar]
 # A sua fala espera a frase acabar antes de traduzir: a voz em inglês sai inteira, não picada.

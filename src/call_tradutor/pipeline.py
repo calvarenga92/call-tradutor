@@ -1,6 +1,7 @@
 """Uma direção de tradução: captura → frases → transcrição → tradução → saída."""
 import logging
 import queue
+import re
 import threading
 import time
 from typing import Callable
@@ -13,6 +14,15 @@ from .stt import STT
 from .translate import Translator
 
 log = logging.getLogger("pipeline")
+
+# interjeições de quem está pensando: não viram legenda, voz nem sugestão de resposta
+_FILLER = re.compile(
+    r"(?:\s*(?:h*m+h*|u+h*m*|e+r+m*|a+h+|o+h*|o+u+|e+h+|h+u+h+|m+h+m+|uh-huh|é+|ã+|ahn|hum+)"
+    r"[\s,.!?…\-]*)+", re.IGNORECASE)
+
+
+def is_filler(text: str) -> bool:
+    return bool(_FILLER.fullmatch(text.strip()))
 
 # on_event(pipeline, tipo, texto). Tipos: partial_src, src, partial_dst, dst, error
 EventFn = Callable[[str, str, str], None]
@@ -140,7 +150,7 @@ class Pipeline:
             return  # menos de 1 s de áudio: o Whisper chuta e a prévia sai errada
         res = self.stt.transcribe(audio, self._lang_hint(), blocking=False,
                                   prompt=self._prev_text)
-        if not res or len(res[0].split()) < 2 or not self.finals.empty():
+        if not res or len(res[0].split()) < 2 or is_filler(res[0]) or not self.finals.empty():
             return
         text, lang = res
         self._emit(ep, "partial_src", text)
@@ -161,8 +171,10 @@ class Pipeline:
             # trecho curto ("e", "hm") detecta idioma errado: não deixa ele travar a conversa
             self._learn_lang(lang, detected=hint is None and len(audio) >= self.LANG_MIN_AUDIO)
             self._prev_text = text[-200:]
-        if not text:
+        if not text or is_filler(text):
             self._emit(ep, "partial_src", "")
+            if text:
+                log.info("%s ignorado (interjeição) | %s", self.name, text)
             return
         self._emit(ep, "src", text)
         if lang == self.translator.dst:

@@ -105,8 +105,10 @@ def boot(cfg: dict, bridge: Bridge, only_captions: bool, pipelines: dict,
                         cable_player.play(c)
 
             speak_tr = Translator(t["ollama_url"], t["model"], "pt", "en", t["context_turns"])
+            # sua fala espera a frase terminar: a voz em inglês sai inteira, não em pedaços
+            speak_seg = {**seg_args, **cfg.get("vad_falar", {})}
             pipelines[SPEAK] = Pipeline(
-                SPEAK, mic_dev, "pt", stt, speak_tr, Segmenter(**seg_args, partial_every_s=None),
+                SPEAK, mic_dev, "pt", stt, speak_tr, Segmenter(**speak_seg, partial_every_s=None),
                 on_event, output=to_cable)
             pipelines[SPEAK].start()
             status += f"  ·  mic: {mic_name}" + (" → VB-Cable" if cable else " (sem VB-Cable: só texto)")

@@ -49,7 +49,10 @@ No Mac, o loopback precisa do [BlackHole](https://github.com/ExistentialAudio/Bl
 .venv\Scripts\python -m call_tradutor              # legenda + voz
 .venv\Scripts\python -m call_tradutor --so-legenda # só legenda
 .venv\Scripts\python scripts\listar_dispositivos.py
+.venv\Scripts\python scripts\testar_cabo.py      # confere a voz EN chegando no CABLE Output, sem precisar de call
 ```
+
+Ao instalar o VB-Cable, o Windows costuma pôr o cabo como saída e microfone padrão. Volte o seu fone e o seu microfone como padrão em **Som**; o app avisa e não liga se a saída padrão for o cabo (senão escutaria a própria voz).
 
 No app da call:
 - **Microfone:** `CABLE Output (VB-Audio Virtual Cable)`. A pessoa só ouve a voz traduzida.
@@ -67,6 +70,7 @@ A janela é arrastável e redimensionável pelo canto.
 - **Use fone de ouvido.**
 - **Feche outros áudios** (YouTube, música): o loopback captura tudo o que sai na saída escolhida.
 - **Avise a outra pessoa** que você está usando tradução automática; ela vai notar o atraso.
+- **Sua fala sai em frases inteiras:** a seção `[vad_falar]` espera ~0,7 s de pausa antes de traduzir, para a voz em inglês não sair picada.
 - **Ajustes** ficam no `config.toml`: voz, sensibilidade do VAD, silêncio que fecha a frase, modelo de tradução.
 - **Log:** fica em `call-tradutor.log`, com tempo de cada etapa (`stt`, `tr`, `out`).
 

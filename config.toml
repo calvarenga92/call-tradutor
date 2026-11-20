@@ -53,6 +53,13 @@ min_speech_ms = 250           # ignora ruídos mais curtos que isso
 soft_max_s = 2.0              # depois disso, qualquer respiração já fecha o trecho
 max_utterance_s = 3.5         # corte forçado para quem fala sem parar
 
+[vad_falar]
+# A sua fala espera a frase acabar antes de traduzir: a voz em inglês sai inteira, não picada.
+# Custa ~0,5 s a mais. Para voltar ao corte rápido, apague esta seção.
+silence_ms = 700              # pausa que fecha a frase (respiração no meio não corta)
+soft_max_s = 8.0
+max_utterance_s = 15.0
+
 [ui]
 font_size = 22
 opacity = 0.88

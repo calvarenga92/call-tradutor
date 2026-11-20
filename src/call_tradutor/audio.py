@@ -29,9 +29,27 @@ def _match(devices, name: str):
     return None
 
 
+VIRTUAL = ("cable", "vb-audio", "voicemeeter")
+
+
+def is_virtual(name: str) -> bool:
+    """Cabo virtual: é por onde a voz traduzida sai, nunca o que o programa deve escutar."""
+    return any(v in name.lower() for v in VIRTUAL)
+
+
+def _default_speaker():
+    speaker = sc.default_speaker()
+    if is_virtual(speaker.name):
+        # acontece ao instalar o VB-Cable: o Windows passa a saída padrão para o cabo,
+        # e o programa escutaria a própria voz em inglês
+        raise RuntimeError(f"A saída padrão do Windows é '{speaker.name}'. Em Som > Reprodução, "
+                           "defina o seu fone como padrão (ou preencha loopback_device no config.toml).")
+    return speaker
+
+
 def get_loopback(name: str = ""):
     """Microfone 'loopback' que grava o que sai no dispositivo de saída."""
-    speaker = _match(sc.all_speakers(), name) if name else sc.default_speaker()
+    speaker = _match(sc.all_speakers(), name) if name else _default_speaker()
     if speaker is None:
         raise RuntimeError(f"Saída de áudio não encontrada: {name!r}")
     return sc.get_microphone(id=str(speaker.name), include_loopback=True), speaker.name
@@ -41,11 +59,14 @@ def get_mic(name: str = ""):
     mic = _match(sc.all_microphones(), name) if name else sc.default_microphone()
     if mic is None:
         raise RuntimeError(f"Microfone não encontrado: {name!r}")
+    if is_virtual(mic.name):
+        raise RuntimeError(f"O microfone escolhido é '{mic.name}' (o cabo virtual). Em Som > Gravação, "
+                           "defina o seu microfone como padrão (ou preencha mic_device no config.toml).")
     return mic, mic.name
 
 
 def get_output(name: str = ""):
-    speaker = _match(sc.all_speakers(), name) if name else sc.default_speaker()
+    speaker = _match(sc.all_speakers(), name) if name else _default_speaker()
     if speaker is None:
         raise RuntimeError(f"Saída de áudio não encontrada: {name!r}")
     return speaker

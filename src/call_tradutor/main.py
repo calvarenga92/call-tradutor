@@ -1,6 +1,7 @@
 """Ponto de entrada: `python -m call_tradutor [--so-legenda]`."""
 import argparse
 import logging
+import os
 import sys
 import threading
 
@@ -131,10 +132,29 @@ def start_hotkeys(cfg: dict, bridge: Bridge) -> None:
         hk["toggle_dub"]: lambda: bridge.toggle.emit("dub"),
         hk["toggle_coach"]: lambda: bridge.toggle.emit("coach"),
         hk.get("clear", "<ctrl>+<alt>+c"): lambda: bridge.toggle.emit("clear"),
+        hk.get("quit", "<ctrl>+<alt>+q"): lambda: bridge.toggle.emit("quit"),
     }).start()
 
 
+def already_running() -> bool:
+    """Uma instância só: duas cópias escutam e falam em dobro (e a janela de uma esconde a outra)."""
+    if sys.platform != "win32":
+        return False
+    import ctypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateMutexW.restype = ctypes.c_void_p
+    global _MUTEX  # mantém o mutex vivo enquanto o app roda; o Windows solta ao fechar
+    _MUTEX = kernel32.CreateMutexW(None, False, "Local\\call-tradutor")
+    return ctypes.get_last_error() == 183  # ERROR_ALREADY_EXISTS
+
+
 def main() -> None:
+    if already_running():
+        import ctypes
+
+        ctypes.windll.user32.MessageBoxW(None, "O Call Tradutor já está aberto.", "Call Tradutor", 0x40)
+        return
     parser = argparse.ArgumentParser(description="Tradução de call em tempo real, local.")
     parser.add_argument("--so-legenda", action="store_true", help="só a legenda (EN→PT)")
     parser.add_argument("--config", help="caminho do config.toml")
@@ -150,8 +170,7 @@ def main() -> None:
     translate.KEEP_ALIVE = t.get("keep_alive", "5m")
 
     app = QApplication(sys.argv)
-    # ao fechar a janela, o modelo sai da memória na hora (não espera o keep_alive)
-    app.aboutToQuit.connect(lambda: translate.unload(t["ollama_url"], t["model"]))
+    app.setApplicationName("Call Tradutor")
     bridge = Bridge()
     win = Overlay(bridge, cfg["ui"]["font_size"], cfg["ui"]["opacity"], cfg["ui"]["history"])
     pipelines: dict = {}
@@ -160,7 +179,9 @@ def main() -> None:
         dub_on.set()
 
     def on_toggle(which: str) -> None:
-        if which == "mic":
+        if which == "quit":
+            win.close()  # salva a posição e encerra (ver shutdown)
+        elif which == "mic":
             p = pipelines.get(SPEAK)
             if p:
                 win.set_toggle("mic", p.toggle())
@@ -182,8 +203,20 @@ def main() -> None:
             else:
                 dub_on.set()
             win.set_toggle("dub", dub_on.is_set())
-        else:
+        elif which == "captions":
             win.set_toggle("captions", not win.captions_on)
+
+    def shutdown() -> None:
+        """Fechar = encerrar tudo: para a captura, solta o modelo do Ollama e sai do processo."""
+        log.info("encerrando")
+        for obj in pipelines.values():
+            stop = getattr(obj, "stop", None)
+            if isinstance(stop, threading.Event):
+                stop.set()
+        # o modelo sai da memória na hora (não espera o keep_alive)
+        translate.unload(t["ollama_url"], t["model"])
+
+    app.aboutToQuit.connect(shutdown)
 
     bridge.toggle.connect(on_toggle)
     if args.so_legenda:
@@ -200,7 +233,11 @@ def main() -> None:
     threading.Thread(target=boot, args=(cfg, bridge, args.so_legenda, pipelines, dub_on),
                      daemon=True).start()
     start_hotkeys(cfg, bridge)
-    sys.exit(app.exec())
+    code = app.exec()
+    logging.shutdown()
+    # threads de áudio, atalhos globais e o carregamento podem estar presos em chamadas nativas;
+    # sair "na marra" garante que não sobra processo escondido segurando microfone e GPU
+    os._exit(code)
 
 
 if __name__ == "__main__":
